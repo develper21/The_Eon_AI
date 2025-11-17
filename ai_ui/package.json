@@ -1,0 +1,46 @@
+{
+  "name": "SahAI",
+  "productName": "SahAI",
+  "version": "1.1.0",
+  "description": "SahAI is your AI assistant that listens and watches, then provides intelligent suggestions automatically during interviews and meetings.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "echo \"No linting configured\"",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "sahai",
+    "sahai ai assistant",
+    "sahai ai assistant for interviews",
+    "sahai cheat assistant",
+    "sahai cheating"
+  ],
+  "author": {
+    "name": "Dev Patel",
+    "email": "dev.patel.codinggita@gmail.com"
+  },
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@google/genai": "^1.2.0",
+    "electron-squirrel-startup": "^1.0.1"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-dmg": "^7.8.1",
+    "@electron-forge/maker-rpm": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
+    "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron/fuses": "^1.8.0",
+    "@reforged/maker-appimage": "^5.0.0",
+    "electron": "^39.2.0",
+    "jsdom": "^23.2.0",
+    "vitest": "^4.0.9"
+  }
+}
