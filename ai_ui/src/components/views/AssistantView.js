@@ -298,6 +298,8 @@ export class AssistantView extends LitElement {
         onSendText: { type: Function },
         shouldAnimateResponse: { type: Boolean },
         savedResponses: { type: Array },
+        partialTranscript: { type: String },
+        inputStatus: { type: Object },
     };
 
     constructor() {
@@ -307,6 +309,9 @@ export class AssistantView extends LitElement {
         this.selectedProfile = 'interview';
         this.onSendText = () => {};
         this._lastAnimatedWordCount = 0;
+        this.partialTranscript = '';
+        this.inputStatus = { state: 'idle', isSpeaking: false };
+        
         // Load saved responses from localStorage
         try {
             this.savedResponses = JSON.parse(localStorage.getItem('savedResponses') || '[]');
@@ -316,7 +321,14 @@ export class AssistantView extends LitElement {
     }
 
     handleDraftInput(e) {
-        this.emitDraftChange(e.target.value);
+        const text = e.target.value;
+        
+        // Use enhanced input handling if available
+        if (window.cheddar && window.cheddar.handleTextInput) {
+            window.cheddar.handleTextInput(text, false);
+        }
+        
+        this.emitDraftChange(text);
     }
 
     emitDraftChange(text) {
@@ -485,6 +497,32 @@ export class AssistantView extends LitElement {
             ipcRenderer.on('scroll-response-up', this.handleScrollUp);
             ipcRenderer.on('scroll-response-down', this.handleScrollDown);
         }
+
+        // Enhanced input system event listeners
+        this.handlePartialTranscript = (event) => {
+            this.partialTranscript = event.detail.text;
+            this.requestUpdate();
+        };
+
+        this.handleInputFinalized = (event) => {
+            console.log('Input finalized:', event.detail);
+            this.partialTranscript = '';
+            this.requestUpdate();
+        };
+
+        this.handleAudioActivity = (event) => {
+            this.inputStatus = {
+                state: event.detail.success ? 'listening' : 'idle',
+                isSpeaking: event.detail.rms > 0.01,
+                rms: event.detail.rms,
+                source: event.detail.source
+            };
+            this.requestUpdate();
+        };
+
+        window.addEventListener('partial-transcript', this.handlePartialTranscript);
+        window.addEventListener('input-finalized', this.handleInputFinalized);
+        window.addEventListener('audio-activity', this.handleAudioActivity);
     }
 
     disconnectedCallback() {
@@ -514,7 +552,13 @@ export class AssistantView extends LitElement {
             const message = textInput.value.trim();
             textInput.value = ''; // Clear input
             this.emitDraftChange('');
-            await this.onSendText(message);
+            
+            // Use enhanced input handling if available
+            if (window.cheddar && window.cheddar.handleTextInput) {
+                window.cheddar.handleTextInput(message, true); // Mark as complete
+            } else {
+                await this.onSendText(message);
+            }
         }
     }
 
