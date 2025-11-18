@@ -1,8 +1,8 @@
 {
-  "name": "SahAI",
-  "productName": "SahAI",
+  "name": "enora-the-eon",
+  "productName": "Enora-the eon",
   "version": "1.1.0",
-  "description": "SahAI is your AI assistant that listens and watches, then provides intelligent suggestions automatically during interviews and meetings.",
+  "description": "Enora-the eon is your AI assistant that listens and watches, then provides intelligent suggestions automatically during interviews and meetings.",
   "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
@@ -13,19 +13,19 @@
     "test": "vitest run"
   },
   "keywords": [
-    "sahai",
-    "sahai ai assistant",
-    "sahai ai assistant for interviews",
-    "sahai cheat assistant",
-    "sahai cheating"
+    "enora-the-eon",
+    "enora-the eon ai assistant",
+    "enora-the eon interview assistant",
+    "enora-the eon cheat assistant",
+    "enora-the eon"
   ],
   "author": {
-    "name": "Dev Patel",
-    "email": "dev.patel.codinggita@gmail.com"
+    "name": "Enora-The-Eon",
+    "email": "deep.goyani.enora@gmail.com"
   },
   "license": "GPL-3.0",
   "dependencies": {
-    "@google/genai": "^1.2.0",
+    "@google/genai": "^1.29.1",
     "electron-squirrel-startup": "^1.0.1"
   },
   "devDependencies": {
