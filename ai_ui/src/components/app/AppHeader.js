@@ -32,6 +32,27 @@ export class AppHeader extends LitElement {
             -webkit-app-region: no-drag;
         }
 
+        .connection-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .connection-pill.warning {
+            color: #facc15;
+            border-color: rgba(250, 204, 21, 0.4);
+        }
+
+        .connection-pill.error {
+            color: #f87171;
+            border-color: rgba(248, 113, 113, 0.4);
+        }
+
         .header-actions span {
             font-size: var(--header-font-size-small);
             color: var(--header-actions-color);
@@ -112,6 +133,9 @@ export class AppHeader extends LitElement {
         onFastModeToggle: { type: Function },
         onRestartCapture: { type: Function },
         onFullReset: { type: Function },
+        connectionHealth: { type: Object },
+        connectionAlert: { type: Object },
+        onForceReconnect: { type: Function },
     };
 
     constructor() {
@@ -133,6 +157,9 @@ export class AppHeader extends LitElement {
         this.onFastModeToggle = () => {};
         this.onRestartCapture = () => {};
         this.onFullReset = () => {};
+        this.connectionHealth = null;
+        this.connectionAlert = null;
+        this.onForceReconnect = () => {};
         this._timerInterval = null;
     }
 
@@ -190,15 +217,15 @@ export class AppHeader extends LitElement {
 
     getViewTitle() {
         const titles = {
-            onboarding: 'Welcome to SahAI',
-            main: 'SahAI',
+            onboarding: 'Welcome to Enora The Eon',
+            main: 'Enora The Eon',
             customize: 'Customize',
             help: 'Help & Shortcuts',
             history: 'Conversation History',
             advanced: 'Advanced Tools',
-            assistant: 'SahAI Assistant',
+            assistant: 'Enora The Eon Assistant',
         };
-        return titles[this.currentView] || 'SahAI';
+        return titles[this.currentView] || 'Enora The Eon';
     }
 
     getElapsedTime() {
@@ -216,11 +243,26 @@ export class AppHeader extends LitElement {
 
     render() {
         const elapsedTime = this.getElapsedTime();
+        const connectionClass = this.connectionAlert
+            ? 'connection-pill error'
+            : this.connectionHealth?.degraded
+            ? 'connection-pill warning'
+            : 'connection-pill';
+        const connectionLabel = this.connectionAlert?.message
+            ? this.connectionAlert.message
+            : this.connectionHealth
+            ? `Ping ${this.connectionHealth.lastPing ? `${Math.floor((Date.now() - this.connectionHealth.lastPing) / 1000)}s` : '--'} · Pending ${
+                  this.connectionHealth.pendingChunks ?? 0
+              } · Reconnects ${this.connectionHealth.reconnectAttempts ?? 0}`
+            : 'Connection Idle';
 
         return html`
             <div class="header">
                 <div class="header-title">${this.getViewTitle()}</div>
                 <div class="header-actions">
+                    ${this.currentView === 'assistant'
+                        ? html`<span class="${connectionClass}">${connectionLabel}</span>`
+                        : ''}
                     ${this.currentView === 'assistant'
                         ? html`
                               <span>${elapsedTime}</span>
@@ -386,6 +428,9 @@ export class AppHeader extends LitElement {
                                   title="Toggle performance mode"
                               >
                                   Fast Mode: ${this.fastMode ? 'On' : 'Off'}
+                              </button>
+                              <button @click=${this.onForceReconnect} class="button" title="Force session reconnect">
+                                  Force Reconnect
                               </button>
                               <button @click=${this.onRestartCapture} class="button" title="Restart capture stream">
                                   Restart Capture
