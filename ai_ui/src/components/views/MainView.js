@@ -143,7 +143,7 @@ export class MainView extends LitElement {
       this.isInitializing = isInitializing;
     });
     document.addEventListener('keydown', this.boundKeydownHandler);
-    this.loadLayoutMode();
+    this.loadLayoutMode?.();
     resizeLayout();
   }
 
@@ -151,6 +151,13 @@ export class MainView extends LitElement {
     super.disconnectedCallback();
     window.electron?.ipcRenderer?.removeAllListeners('session-initializing');
     document.removeEventListener('keydown', this.boundKeydownHandler);
+  }
+
+  loadLayoutMode() {
+    const savedLayoutMode = localStorage.getItem('layoutMode');
+    if (savedLayoutMode && typeof this.onLayoutModeChange === 'function') {
+      this.onLayoutModeChange(savedLayoutMode);
+    }
   }
 
   handleKeydown(e) {
