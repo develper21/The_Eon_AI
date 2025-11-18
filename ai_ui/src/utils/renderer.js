@@ -1,5 +1,8 @@
-// renderer.js
+// renderer.js - Enhanced Enora The Eon Input System
 const { ipcRenderer } = require('electron');
+
+// InputBuffer is provided via global script include (utils/inputBuffer.js)
+const InputBuffer = window.InputBuffer;
 
 function emitAppEvent(name, detail = {}) {
     window.dispatchEvent(
@@ -38,6 +41,12 @@ let hiddenVideo = null;
 let offscreenCanvas = null;
 let offscreenContext = null;
 let currentImageQuality = 'fast'; // Store current image quality for manual screenshots
+
+// Enhanced input buffer system
+let inputBuffer = null;
+let screenshotDebouncer = null;
+let lastScreenshotTime = 0;
+const SCREENSHOT_MIN_INTERVAL = 2000; // Minimum 2 seconds between screenshots
 
 const isLinux = process.platform === 'linux';
 const isMacOS = process.platform === 'darwin';
@@ -180,7 +189,16 @@ ipcRenderer.on('update-status', (event, status) => {
     cheddar.setStatus(status);
 });
 
-// Listen for responses - REMOVED: This is handled in CheatingDaddyApp.js to avoid duplicates
+// Connection health events
+ipcRenderer.on('connection-metrics', (event, metrics) => {
+    emitAppEvent('connection-metrics', metrics || {});
+});
+
+ipcRenderer.on('connection-alert', (event, alert) => {
+    emitAppEvent('connection-alert', alert || {});
+});
+
+// Listen for responses - REMOVED: This is handled in EnoraTheEonApp.js to avoid duplicates
 // ipcRenderer.on('update-response', (event, response) => {
 //     console.log('Gemini response:', response);
 //     cheddar.e().setResponse(response);
@@ -372,7 +390,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
 }
 
 function setupLinuxMicProcessing(micStream) {
-    // Setup microphone audio processing for Linux
+    // Setup enhanced microphone audio processing for Linux
     const micAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     const micSource = micAudioContext.createMediaStreamSource(micStream);
     const micProcessor = micAudioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
@@ -382,19 +400,28 @@ function setupLinuxMicProcessing(micStream) {
 
     micProcessor.onaudioprocess = async e => {
         const inputData = e.inputBuffer.getChannelData(0);
-        audioBuffer.push(...inputData);
+        
+        // Add to enhanced input buffer for VAD and smart processing
+        if (inputBuffer) {
+            const success = inputBuffer.addAudioChunk(inputData, Date.now());
+            if (success) {
+                emitAppEvent('audio-activity', { source: 'mic', success: true, rms: inputBuffer.calculateRMS(inputData) });
+            }
+        } else {
+            // Fallback to original processing if buffer not initialized
+            audioBuffer.push(...inputData);
 
-        // Process audio in chunks
-        while (audioBuffer.length >= samplesPerChunk) {
-            const chunk = audioBuffer.splice(0, samplesPerChunk);
-            const pcmData16 = convertFloat32ToInt16(chunk);
-            const base64Data = arrayBufferToBase64(pcmData16.buffer);
+            while (audioBuffer.length >= samplesPerChunk) {
+                const chunk = audioBuffer.splice(0, samplesPerChunk);
+                const pcmData16 = convertFloat32ToInt16(chunk);
+                const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-mic-audio-content', {
-                data: base64Data,
-                mimeType: 'audio/pcm;rate=24000',
-            });
-            emitAppEvent('audio-activity', { source: 'mic', success: true });
+                await ipcRenderer.invoke('send-mic-audio-content', {
+                    data: base64Data,
+                    mimeType: 'audio/pcm;rate=24000',
+                });
+                emitAppEvent('audio-activity', { source: 'mic', success: true });
+            }
         }
     };
 
@@ -406,7 +433,7 @@ function setupLinuxMicProcessing(micStream) {
 }
 
 function setupLinuxSystemAudioProcessing() {
-    // Setup system audio processing for Linux (from getDisplayMedia)
+    // Setup enhanced system audio processing for Linux (from getDisplayMedia)
     audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     const source = audioContext.createMediaStreamSource(mediaStream);
     audioProcessor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
@@ -416,19 +443,28 @@ function setupLinuxSystemAudioProcessing() {
 
     audioProcessor.onaudioprocess = async e => {
         const inputData = e.inputBuffer.getChannelData(0);
-        audioBuffer.push(...inputData);
+        
+        // Add to enhanced input buffer for VAD and smart processing
+        if (inputBuffer) {
+            const success = inputBuffer.addAudioChunk(inputData, Date.now());
+            if (success) {
+                emitAppEvent('audio-activity', { source: 'system', success: true, rms: inputBuffer.calculateRMS(inputData) });
+            }
+        } else {
+            // Fallback to original processing
+            audioBuffer.push(...inputData);
 
-        // Process audio in chunks
-        while (audioBuffer.length >= samplesPerChunk) {
-            const chunk = audioBuffer.splice(0, samplesPerChunk);
-            const pcmData16 = convertFloat32ToInt16(chunk);
-            const base64Data = arrayBufferToBase64(pcmData16.buffer);
+            while (audioBuffer.length >= samplesPerChunk) {
+                const chunk = audioBuffer.splice(0, samplesPerChunk);
+                const pcmData16 = convertFloat32ToInt16(chunk);
+                const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-audio-content', {
-                data: base64Data,
-                mimeType: 'audio/pcm;rate=24000',
-            });
-            emitAppEvent('audio-activity', { source: 'system', success: true });
+                await ipcRenderer.invoke('send-audio-content', {
+                    data: base64Data,
+                    mimeType: 'audio/pcm;rate=24000',
+                });
+                emitAppEvent('audio-activity', { source: 'system', success: true });
+            }
         }
     };
 
@@ -478,11 +514,30 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
         return;
     }
 
-    // Check rate limiting for automated screenshots only
-    if (!isManual && tokenTracker.shouldThrottle()) {
-        console.log('⚠️ Automated screenshot skipped due to rate limiting');
-        return;
+    const now = Date.now();
+    
+    // Enhanced screenshot debouncing and prioritization
+    if (!isManual) {
+        // Skip if audio is actively being processed
+        if (inputBuffer && inputBuffer.isSpeaking) {
+            console.log('📸 Screenshot skipped - audio input active');
+            return;
+        }
+        
+        // Apply minimum interval between screenshots
+        if (now - lastScreenshotTime < SCREENSHOT_MIN_INTERVAL) {
+            console.log('📸 Screenshot skipped - too frequent');
+            return;
+        }
+        
+        // Check rate limiting for automated screenshots
+        if (tokenTracker.shouldThrottle()) {
+            console.log('⚠️ Automated screenshot skipped due to rate limiting');
+            return;
+        }
     }
+    
+    lastScreenshotTime = now;
 
     // Lazy init of video element
     if (!hiddenVideo) {
@@ -812,22 +867,162 @@ function handleShortcut(shortcutKey) {
     }
 }
 
-// Create reference to the main app element
-const cheatingDaddyApp = document.querySelector('cheating-daddy-app');
+// Initialize enhanced input buffer system
+function initializeInputBuffer() {
+    if (typeof InputBuffer !== 'undefined') {
+        inputBuffer = new InputBuffer();
+        
+        // Set up callbacks for input buffer events
+        inputBuffer.onPartialTranscript = (transcript) => {
+            console.log('📝 Partial transcript:', transcript);
+            // Update UI with partial transcript
+            emitAppEvent('partial-transcript', { text: transcript });
+        };
+        
+        inputBuffer.onFinalInput = (inputData) => {
+            console.log('✅ Final input ready:', inputData);
+            // Notify UI that input is complete and processing
+            emitAppEvent('input-finalized', inputData);
+        };
+        
+        inputBuffer.onStateChange = (newState, oldState) => {
+            console.log(`🔄 Input state: ${oldState} → ${newState}`);
+            // Update UI status based on input state
+            const statusMap = {
+                'idle': 'Ready',
+                'listening': 'Listening...',
+                'buffering': 'Processing input...',
+                'finalizing': 'Finalizing response...'
+            };
+            
+            if (cheddar && cheddar.setStatus) {
+                cheddar.setStatus(statusMap[newState] || newState);
+            }
+        };
+        
+        console.log('🚀 Enhanced input buffer system initialized');
+    } else {
+        console.warn('⚠️ InputBuffer not available, using fallback processing');
+    }
+}
+
+// Initialize when DOM is ready with error handling
+function safeInitializeInputBuffer() {
+    try {
+        initializeInputBuffer();
+    } catch (error) {
+        console.error('Error initializing input buffer:', error);
+        // Retry after a delay
+        setTimeout(safeInitializeInputBuffer, 1000);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', safeInitializeInputBuffer);
+} else {
+    // Wait a bit for all scripts to load
+    setTimeout(safeInitializeInputBuffer, 500);
+}
+
+// Create reference to the main app element with fallback
+let enoraTheEonApp = document.querySelector('enora-theeon-app');
+if (!enoraTheEonApp) {
+    // Wait for element to be available
+    const waitForApp = () => {
+        enoraTheEonApp = document.querySelector('enora-theeon-app');
+        if (!enoraTheEonApp) {
+            setTimeout(waitForApp, 100);
+        }
+    };
+    waitForApp();
+}
+
+// Enhanced text input handling
+function handleTextInput(text, isComplete = false) {
+    if (inputBuffer) {
+        inputBuffer.addTextInput(text, isComplete);
+    } else {
+        // Fallback to direct sending
+        if (isComplete) {
+            sendTextMessage(text);
+        }
+    }
+}
+
+// Enhanced audio chunk sending with persistent queueing
+async function sendAudioChunkToGemini(chunk, isFinal = false) {
+    try {
+        const pcmData16 = convertFloat32ToInt16(chunk.data);
+        const base64Data = arrayBufferToBase64(pcmData16.buffer);
+
+        const payload = {
+            data: base64Data,
+            mimeType: 'audio/pcm;rate=24000',
+            isFinal,
+            timestamp: chunk.timestamp || Date.now(),
+            chunkId: chunk.chunkId,
+        };
+
+        return await ipcRenderer.invoke('send-audio-chunk', payload);
+    } catch (error) {
+        console.error('Error queueing audio chunk:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Enhanced text chunk sending with persistent queueing
+async function sendTextChunkToGemini(text, isFinal = false) {
+    try {
+        const payload = {
+            text,
+            isFinal,
+            timestamp: Date.now(),
+        };
+
+        return await ipcRenderer.invoke('send-text-chunk', payload);
+    } catch (error) {
+        console.error('Error queueing text chunk:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function notifyTurnComplete(details = {}) {
+    try {
+        const payload = {
+            reason: details.reason || 'user',
+            stats: details.stats || null,
+        };
+        await ipcRenderer.invoke('notify-turn-complete', payload);
+    } catch (error) {
+        console.error('Error notifying turn complete:', error);
+    }
+}
 
 // Consolidated cheddar object - all functions in one place
 const cheddar = {
-    // Element access
-    element: () => cheatingDaddyApp,
-    e: () => cheatingDaddyApp,
+    // Element access with safety checks
+    element: () => enoraTheEonApp || document.querySelector('enora-theeon-app'),
+    e: () => enoraTheEonApp || document.querySelector('enora-theeon-app'),
 
     // App state functions - access properties directly from the app element
-    getCurrentView: () => cheatingDaddyApp.currentView,
-    getLayoutMode: () => cheatingDaddyApp.layoutMode,
+    getCurrentView: () => {
+        const app = enoraTheEonApp || document.querySelector('enora-theeon-app');
+        return app ? app.currentView : 'main';
+    },
+    getLayoutMode: () => {
+        const app = enoraTheEonApp || document.querySelector('enora-theeon-app');
+        return app ? app.layoutMode : 'normal';
+    },
 
-    // Status and response functions
-    setStatus: text => cheatingDaddyApp.setStatus(text),
-    setResponse: response => cheatingDaddyApp.setResponse(response),
+    // Status and response functions with safety checks
+    setStatus: text => {
+        const app = enoraTheEonApp || document.querySelector('enora-theeon-app');
+        if (app && app.setStatus) app.setStatus(text);
+    },
+    setResponse: response => {
+        const app = enoraTheEonApp || document.querySelector('enora-theeon-app');
+        if (app && app.setResponse) app.setResponse(response);
+    },
 
     // Core functionality
     initializeGemini,
@@ -836,6 +1031,17 @@ const cheddar = {
     captureManualScreenshot,
     sendTextMessage,
     handleShortcut,
+    
+    // Enhanced input handling
+    handleTextInput,
+    sendAudioChunk: sendAudioChunkToGemini,
+    sendTextChunk: sendTextChunkToGemini,
+    notifyTurnComplete,
+    
+    // Input buffer management
+    getInputStatus: () => inputBuffer ? inputBuffer.getStatus() : null,
+    resetInput: () => inputBuffer ? inputBuffer.reset() : null,
+    configureInput: (config) => inputBuffer ? inputBuffer.updateConfig(config) : null,
 
     // Conversation history functions
     getAllConversationSessions,
