@@ -280,6 +280,21 @@ export class EnoraTheEonApp extends LitElement {
         };
         window.addEventListener('draft-changed', this._draftListener);
 
+        this._manualScreenshotHandler = async () => {
+            try {
+                const draftText = (this.latestDraftMessage || '').trim();
+                const quality = this.selectedImageQuality || 'medium';
+                if (typeof window.captureManualScreenshot === 'function') {
+                    await window.captureManualScreenshot(quality, draftText);
+                } else {
+                    throw new Error('Screenshot module not loaded');
+                }
+            } catch (error) {
+                console.error('Manual screenshot failed:', error);
+                this.setStatus('Screenshot failed: ' + (error?.message || 'unknown error'));
+            }
+        };
+
         this._connectionMetricsListener = event => {
             this.connectionHealth = event.detail || null;
             this.requestUpdate();
@@ -758,7 +773,7 @@ export class EnoraTheEonApp extends LitElement {
                         .onCloseClick=${() => this.handleClose()}
                         .onBackClick=${() => this.handleBackClick()}
                         .onHideToggleClick=${() => this.handleHideToggle()}
-                        .onManualScreenshot=${() => this.handleManualScreenshotWithText()}
+                        .onManualScreenshot=${() => this._manualScreenshotHandler()}
                         .onFastModeToggle=${() => this.handleFastModeChange(!this.fastMode)}
                         .onRestartCapture=${() => this.handleRestartCapture()}
                         .onFullReset=${() => this.handleFullReset()}
