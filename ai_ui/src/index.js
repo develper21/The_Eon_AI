@@ -2,7 +2,7 @@ if (require('electron-squirrel-startup')) {
     process.exit(0);
 }
 
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, autoUpdater } = require('electron');
 const fetch = require("node-fetch");
 
 const { createWindow, updateGlobalShortcuts } = require('./utils/window');
@@ -16,6 +16,60 @@ let mainWindow = null;
 
 // Initialize random process names for stealth
 const randomNames = initializeRandomProcessNames();
+const UPDATE_FEED_URL = process.env.EON_AUTOUPDATE_FEED || '';
+
+function setupAutoUpdater() {
+    if (process.platform !== 'win32') {
+        return;
+    }
+
+    if (!UPDATE_FEED_URL) {
+        console.warn('Auto-update feed disabled: EON_AUTOUPDATE_FEED env var not set');
+        return;
+    }
+
+    try {
+        autoUpdater.setFeedURL({ url: UPDATE_FEED_URL });
+    } catch (error) {
+        console.error('Failed to configure auto-updater feed:', error);
+        return;
+    }
+
+    autoUpdater.on('error', error => {
+        console.error('Auto-updater error:', error);
+    });
+
+    autoUpdater.on('update-available', () => {
+        console.log('Auto-updater: update available, downloading...');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-status', 'Downloading update...');
+        }
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        console.log('Auto-updater: no updates found');
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+        console.log('Auto-updater: update downloaded, installing');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-status', 'Installing update...');
+        }
+        autoUpdater.quitAndInstall();
+    });
+
+    const CHECK_INTERVAL_MS = 60 * 60 * 1000; // hourly
+    const checkForUpdates = () => {
+        try {
+            autoUpdater.checkForUpdates();
+        } catch (error) {
+            console.error('Auto-updater check failed:', error);
+        }
+    };
+
+    checkForUpdates();
+    setInterval(checkForUpdates, CHECK_INTERVAL_MS);
+}
 
 async function checkVersion() {
     const currentVersion = app.getVersion();  // version from package.json
@@ -55,6 +109,7 @@ app.whenReady().then(async () => {
     createMainWindow();    
     setupGeminiIpcHandlers(geminiSessionRef);
     setupGeneralIpcHandlers();
+    setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {
