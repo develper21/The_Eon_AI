@@ -5,8 +5,8 @@ module.exports = {
     packagerConfig: {
         asar: true,
         extraResource: ['./src/assets/SystemAudioDump'],
-        name: 'SahAI',
-        icon: 'src/assets/logo',
+        name: 'EON AI',
+        icon: '/src/assets/old/0.3/favicon.png',
         // use `security find-identity -v -p codesigning` to find your identity
         // for macos signing
         // also fuck apple
@@ -30,9 +30,9 @@ module.exports = {
         {
             name: '@electron-forge/maker-squirrel',
             config: {
-                name: 'sahai',
-                productName: 'SahAI',
-                shortcutName: 'SahAI',
+                name: 'eonai',
+                productName: 'EON AI',
+                shortcutName: 'EON AI',
                 createDesktopShortcut: true,
                 createStartMenuShortcut: true,
             },
@@ -46,8 +46,8 @@ module.exports = {
             platforms: ['linux'],
             config: {
                 options: {
-                    name: 'SahAI',
-                    productName: 'SahAI',
+                    name: 'eonai',
+                    productName: 'EON AI',
                     genericName: 'AI Assistant',
                     description: 'AI assistant for interviews and learning',
                     categories: ['Development', 'Education'],
