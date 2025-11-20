@@ -76,11 +76,6 @@ let tokenTracker = {
             return 258;
         }
 
-async function captureManualScreenshot(imageQualityOverride = null) {
-    const quality = imageQualityOverride || currentImageQuality || 'medium';
-    return captureScreenshot(quality, true);
-}
-
         // Larger images are tiled into 768x768 chunks, each = 258 tokens
         const tilesX = Math.ceil(width / 768);
         const tilesY = Math.ceil(height / 768);
@@ -669,18 +664,11 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
     );
 }
 
-async function captureManualScreenshot(imageQuality = null, textContext = '') {
+async function captureManualScreenshot(imageQuality = null) {
     console.log('Manual screenshot triggered');
     emitAppEvent('manual-screenshot-status', { state: 'pending' });
     const quality = imageQuality || currentImageQuality;
-    const screenshotPromise = captureScreenshot(quality, true);
-
-    let textPromise = Promise.resolve();
-    if (textContext && textContext.trim().length > 0) {
-        textPromise = sendTextMessage(`Question on screen: ${textContext.trim()}`);
-    }
-
-    await Promise.all([screenshotPromise, textPromise]);
+    await captureScreenshot(quality, true);
 }
 
 // Expose functions to global scope for external access
