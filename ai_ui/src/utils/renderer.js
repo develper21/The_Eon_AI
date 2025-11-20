@@ -871,6 +871,10 @@ function handleShortcut(shortcutKey) {
 function initializeInputBuffer() {
     if (typeof InputBuffer !== 'undefined') {
         inputBuffer = new InputBuffer();
+        inputBuffer.updateConfig({
+            textAutoFinalizeEnabled: false,
+            autoFinalizeIdleThreshold: 2000,
+        });
         
         // Set up callbacks for input buffer events
         inputBuffer.onPartialTranscript = (transcript) => {
