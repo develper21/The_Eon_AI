@@ -11,13 +11,13 @@ class InputBuffer {
         
         // VAD (Voice Activity Detection) configuration
         this.vadThreshold = 0.006; // RMS threshold for speech detection
-        this.silenceThreshold = 500; // ms of silence before finalizing
+        this.silenceThreshold = 1200; // ms of silence before finalizing
         this.minSpeechDuration = 150; // minimum speech duration to consider valid
         this.lastSpeechTime = 0;
         this.lastActivityTime = 0;
         this.isSpeaking = false;
         this.speechStartTime = 0;
-        this.maxSpeechDuration = 5000; // hard stop after 5s to avoid long waits
+        this.maxSpeechDuration = 7000; // hard stop after ~7s to avoid long waits
         
         // Text buffer configuration
         this.textBuffer = '';
@@ -102,6 +102,7 @@ class InputBuffer {
         if (this.isFinalized) return false;
         
         const isSpeech = this.detectSpeech(audioData);
+        this.lastInputType = 'audio';
         
         const chunk = {
             data: audioData,
@@ -144,6 +145,8 @@ class InputBuffer {
         this.lastTextActivity = now;
         this.lastActivityTime = now;
         
+        this.lastInputType = 'text';
+
         if (isComplete) {
             this.textBuffer = text;
             this.finalizeInput('text');
@@ -256,12 +259,17 @@ class InputBuffer {
             }
             
             // Check for text completion (no typing activity)
-            if (this.textBuffer && totalSilence > this.textSilenceThreshold) {
+            if (this.textAutoFinalizeEnabled && this.textBuffer && totalSilence > this.textSilenceThreshold) {
                 console.log('⌨️ Text input timeout - finalizing');
                 this.finalizeInput('text');
             }
 
-            if (!this.isFinalized && (this.state === 'listening' || this.state === 'buffering')) {
+            const shouldAutoFinalizeIdle =
+                !this.isFinalized &&
+                (this.state === 'listening' ||
+                    (this.state === 'buffering' && (this.lastInputType !== 'text' || this.textAutoFinalizeEnabled)));
+
+            if (shouldAutoFinalizeIdle) {
                 const idleFor = now - this.lastActivityTime;
                 if (idleFor > this.autoFinalizeIdleThreshold) {
                     console.log('⏩ Idle finalize triggered');
@@ -387,6 +395,7 @@ class InputBuffer {
         if (config.silenceThreshold !== undefined) this.silenceThreshold = config.silenceThreshold;
         if (config.minSpeechDuration !== undefined) this.minSpeechDuration = config.minSpeechDuration;
         if (config.textSilenceThreshold !== undefined) this.textSilenceThreshold = config.textSilenceThreshold;
+        if (config.textAutoFinalizeEnabled !== undefined) this.textAutoFinalizeEnabled = config.textAutoFinalizeEnabled;
         
         console.log('📝 Updated buffer configuration:', config);
     }
