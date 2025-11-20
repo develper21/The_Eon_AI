@@ -295,6 +295,8 @@ export class EnoraTheEonApp extends LitElement {
             }
         };
 
+        this.handleManualScreenshotWithText = this._manualScreenshotHandler;
+
         this._connectionMetricsListener = event => {
             this.connectionHealth = event.detail || null;
             this.requestUpdate();
