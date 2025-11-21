@@ -27,6 +27,7 @@
   "dependencies": {
     "@google/genai": "^1.29.1",
     "electron-squirrel-startup": "^1.0.1",
+    "highlight.js": "^11.9.0",
     "node-fetch": "^2.6.12"
   },
   "devDependencies": {
