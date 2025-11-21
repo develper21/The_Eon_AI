@@ -381,6 +381,24 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
+    ipcMain.handle('set-manual-resize-lock', async (event, { enabled }) => {
+        try {
+            if (mainWindow.isDestroyed()) {
+                return { success: false, error: 'Window has been destroyed' };
+            }
+
+            if (enabled) {
+                mainWindow.setResizable(false);
+            } else {
+                mainWindow.setResizable(true);
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('Error toggling manual resize lock:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
     function animateWindowResize(mainWindow, targetWidth, targetHeight, layoutMode) {
         return new Promise(resolve => {
             // Check if window is destroyed before starting animation
