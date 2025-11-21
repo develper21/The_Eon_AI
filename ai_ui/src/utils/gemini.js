@@ -6,7 +6,6 @@ const { getSystemPrompt } = require('./prompts');
 const fs = require('fs');
 const path = require('path');
 
-// Conversation tracking variables
 let currentSessionId = null;
 let currentTranscription = '';
 let conversationHistory = [];
@@ -14,8 +13,8 @@ let isInitializingSession = false;
 let isRefreshingSession = false;
 let lastSessionRefresh = 0;
 let turnsSinceRefresh = 0;
+const AUTO_REFRESH_TURN_LIMIT = 6;
 
-// Connection resilience configuration (can be tuned via renderer controls)
 const CONNECTION_CONSTANTS = {
     pingInterval: 60000,
     pongTimeout: 30000,
