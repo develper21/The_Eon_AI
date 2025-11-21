@@ -1,3 +1,120 @@
+async function waitForNextVideoFrame(video, maxWait = 250) {
+    if (!video) return;
+    return new Promise(resolve => {
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            resolve();
+        };
+
+        if (typeof video.requestVideoFrameCallback === 'function') {
+            video.requestVideoFrameCallback(() => finish());
+        } else {
+            const handler = () => {
+                video.removeEventListener('timeupdate', handler);
+                finish();
+            };
+            video.addEventListener('timeupdate', handler, { once: true });
+        }
+        if (maxWait) {
+            setTimeout(finish, maxWait);
+        }
+    });
+}
+
+async function drawLatestFrame(forceFullResolution = false) {
+    const drawToCanvas = source => {
+        offscreenContext.drawImage(source, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+    };
+
+    if (imageCapture) {
+        try {
+            const bitmap = await imageCapture.grabFrame();
+            drawToCanvas(bitmap);
+            if (bitmap.close) bitmap.close();
+            return;
+        } catch (error) {
+            console.warn('ImageCapture grabFrame failed, falling back to video:', error.message);
+            imageCapture = null;
+            lastVideoTrackId = null;
+        }
+    }
+
+    drawToCanvas(hiddenVideo);
+}
+
+async function prepareCaptureSurfaces(forceFullResolution = false) {
+    if (!mediaStream) {
+        throw new Error('No active media stream');
+    }
+
+    const videoTrack = mediaStream.getVideoTracks()[0];
+    if (!videoTrack || videoTrack.readyState === 'ended') {
+        throw new Error('Screen share is not active');
+    }
+
+    if (typeof ImageCapture === 'function' && videoTrack.id !== lastVideoTrackId) {
+        try {
+            imageCapture = new ImageCapture(videoTrack);
+            lastVideoTrackId = videoTrack.id;
+            console.log('🎥 ImageCapture initialized for track', lastVideoTrackId);
+        } catch (error) {
+            console.warn('ImageCapture not available, using video fallback:', error.message);
+            imageCapture = null;
+            lastVideoTrackId = null;
+        }
+    }
+
+    const needsNewVideo = !hiddenVideo;
+    if (needsNewVideo) {
+        hiddenVideo = document.createElement('video');
+        hiddenVideo.muted = true;
+        hiddenVideo.playsInline = true;
+    }
+
+    if (hiddenVideo.srcObject !== mediaStream) {
+        hiddenVideo.srcObject = mediaStream;
+    }
+
+    if (hiddenVideo.paused || hiddenVideo.readyState < 2) {
+        try {
+            await hiddenVideo.play();
+        } catch (error) {
+            console.warn('Failed to autoplay hidden video for capture:', error);
+        }
+        await new Promise(resolve => {
+            if (hiddenVideo.readyState >= 2) {
+                resolve();
+                return;
+            }
+            hiddenVideo.onloadedmetadata = () => resolve();
+        });
+    }
+
+    await waitForNextVideoFrame(hiddenVideo);
+
+    const downscaleFactor = forceFullResolution ? 1 : localStorage.getItem('fastMode') === 'true' ? 0.5 : 1;
+    const targetWidth = Math.max(1, Math.round(hiddenVideo.videoWidth * downscaleFactor));
+    const targetHeight = Math.max(1, Math.round(hiddenVideo.videoHeight * downscaleFactor));
+
+    const canvasStale =
+        !offscreenCanvas ||
+        lastCanvasConfig.width !== targetWidth ||
+        lastCanvasConfig.height !== targetHeight ||
+        lastCanvasConfig.downscaleFactor !== downscaleFactor;
+
+    if (canvasStale) {
+        offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = targetWidth;
+        offscreenCanvas.height = targetHeight;
+        offscreenContext = offscreenCanvas.getContext('2d');
+        lastCanvasConfig = { width: targetWidth, height: targetHeight, downscaleFactor };
+        console.log(
+            `🖼️ Refreshed capture canvas ${targetWidth}x${targetHeight} (forceFullResolution=${forceFullResolution})`
+        );
+    }
+}
 // renderer.js - Enhanced Enora The Eon Input System
 const { ipcRenderer } = require('electron');
 
@@ -41,6 +158,13 @@ let hiddenVideo = null;
 let offscreenCanvas = null;
 let offscreenContext = null;
 let currentImageQuality = 'fast'; // Store current image quality for manual screenshots
+let lastCanvasConfig = {
+    width: 0,
+    height: 0,
+    downscaleFactor: 1,
+};
+let imageCapture = null;
+let lastVideoTrackId = null;
 
 // Enhanced input buffer system
 let inputBuffer = null;
@@ -497,15 +621,21 @@ function setupWindowsLoopbackProcessing() {
     audioProcessor.connect(audioContext.destination);
 }
 
-async function captureScreenshot(imageQuality = 'medium', isManual = false) {
+async function captureScreenshot(imageQuality = 'medium', isManual = false, manualPrompt = '', options = {}) {
+    const { forceFullResolution = false, manualModeTag = null } = options || {};
+    const emitManualStatus = (state, extra = {}) => {
+        if (!isManual) return;
+        emitAppEvent('manual-screenshot-status', {
+            state,
+            ...extra,
+            ...(manualModeTag ? { mode: manualModeTag } : {}),
+        });
+    };
     console.log(`Capturing ${isManual ? 'manual' : 'automated'} screenshot...`);
     if (!mediaStream) {
-        if (isManual) {
-            emitAppEvent('manual-screenshot-status', {
-                state: 'error',
-                message: 'Screen share is not active. Start capture first.',
-            });
-        }
+        emitManualStatus('error', {
+            message: 'Screen share is not active. Start capture first.',
+        });
         return;
     }
 
@@ -534,39 +664,19 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
     
     lastScreenshotTime = now;
 
-    // Lazy init of video element
-    if (!hiddenVideo) {
-        hiddenVideo = document.createElement('video');
-        hiddenVideo.srcObject = mediaStream;
-        hiddenVideo.muted = true;
-        hiddenVideo.playsInline = true;
-        await hiddenVideo.play();
-
-        await new Promise(resolve => {
-            if (hiddenVideo.readyState >= 2) return resolve();
-            hiddenVideo.onloadedmetadata = () => resolve();
-        });
-
-        const downscaleFactor = localStorage.getItem('fastMode') === 'true' ? 0.5 : 1;
-        offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = Math.max(1, Math.round(hiddenVideo.videoWidth * downscaleFactor));
-        offscreenCanvas.height = Math.max(1, Math.round(hiddenVideo.videoHeight * downscaleFactor));
-        offscreenContext = offscreenCanvas.getContext('2d');
-    }
+    // Make sure we're drawing the freshest possible frame
+    await prepareCaptureSurfaces(forceFullResolution);
 
     // Check if video is ready
     if (hiddenVideo.readyState < 2) {
         console.warn('Video not ready yet, skipping screenshot');
-        if (isManual) {
-            emitAppEvent('manual-screenshot-status', {
-                state: 'error',
-                message: 'Screen preview is still initializing.',
-            });
-        }
+        emitManualStatus('error', {
+            message: 'Screen preview is still initializing.',
+        });
         return;
     }
 
-    offscreenContext.drawImage(hiddenVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+    await drawLatestFrame(forceFullResolution);
 
     // Check if image was drawn properly by sampling a pixel
     const imageData = offscreenContext.getImageData(0, 0, 1, 1);
@@ -598,12 +708,9 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
         async blob => {
             if (!blob) {
                 console.error('Failed to create blob from canvas');
-                if (isManual) {
-                    emitAppEvent('manual-screenshot-status', {
-                        state: 'error',
-                        message: 'Failed to generate screenshot',
-                    });
-                }
+                emitManualStatus('error', {
+                    message: 'Failed to generate screenshot',
+                });
                 return;
             }
 
@@ -614,12 +721,9 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
                 // Validate base64 data
                 if (!base64data || base64data.length < 100) {
                     console.error('Invalid base64 data generated');
-                    if (isManual) {
-                        emitAppEvent('manual-screenshot-status', {
-                            state: 'error',
-                            message: 'Generated screenshot data was empty',
-                        });
-                    }
+                    emitManualStatus('error', {
+                        message: 'Generated screenshot data was empty',
+                    });
                     return;
                 }
 
@@ -634,27 +738,26 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
                         tokenTracker.addTokens(imageTokens, 'image');
                         console.log(`📊 Image sent successfully - ${imageTokens} tokens used (${offscreenCanvas.width}x${offscreenCanvas.height})`);
                         if (isManual) {
-                            emitAppEvent('manual-screenshot-status', {
-                                state: 'sent',
-                            });
+                            const promptResult =
+                                manualModeTag === 'leet'
+                                    ? await sendLeetScreenshotPrompt(manualPrompt)
+                                    : await sendManualScreenshotPrompt(manualPrompt);
+                            if (!promptResult?.success) {
+                                throw new Error(promptResult?.error || 'Failed to send screenshot prompt');
+                            }
+                            emitManualStatus('sent');
                         }
                     } else {
                         console.error('Failed to send image:', result.error);
-                        if (isManual) {
-                            emitAppEvent('manual-screenshot-status', {
-                                state: 'error',
-                                message: result.error,
-                            });
-                        }
+                        emitManualStatus('error', {
+                            message: result.error,
+                        });
                     }
                 } catch (error) {
                     console.error('Error sending manual screenshot:', error);
-                    if (isManual) {
-                        emitAppEvent('manual-screenshot-status', {
-                            state: 'error',
-                            message: error.message,
-                        });
-                    }
+                    emitManualStatus('error', {
+                        message: error.message,
+                    });
                 }
             };
             reader.readAsDataURL(blob);
@@ -664,15 +767,23 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
     );
 }
 
-async function captureManualScreenshot(imageQuality = null) {
+async function captureManualScreenshot(imageQuality = null, manualPrompt = '') {
     console.log('Manual screenshot triggered');
-    emitAppEvent('manual-screenshot-status', { state: 'pending' });
+    emitAppEvent('manual-screenshot-status', { state: 'pending', mode: 'manual' });
     const quality = imageQuality || currentImageQuality;
-    await captureScreenshot(quality, true);
+    await captureScreenshot(quality, true, manualPrompt, { manualModeTag: 'manual' });
+}
+
+async function captureLeetScreenshot() {
+    console.log('LeetCode screenshot triggered');
+    emitAppEvent('manual-screenshot-status', { state: 'pending', mode: 'leet' });
+    const autoPrompt = 'LeetCode screenshot autoprompt - solve directly from the captured problem, no extra context available.';
+    await captureScreenshot('high', true, autoPrompt, { forceFullResolution: true, manualModeTag: 'leet' });
 }
 
 // Expose functions to global scope for external access
 window.captureManualScreenshot = captureManualScreenshot;
+window.captureLeetScreenshot = captureLeetScreenshot;
 
 function stopCapture() {
     if (screenshotInterval) {
@@ -737,6 +848,43 @@ async function sendTextMessage(text) {
         console.error('Error sending text message:', error);
         return { success: false, error: error.message };
     }
+}
+
+const LEETCODE_SIGNAL_PATTERNS = [
+    /leetcode/i,
+    /\blc\s*#?\s*\d+/i,
+    /\bleet code/i,
+];
+
+function isLikelyLeetCodeContext(promptText = '') {
+    const normalized = (promptText || '').trim();
+    if (!normalized) return false;
+    return LEETCODE_SIGNAL_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
+function buildManualScreenshotPrompt(userPrompt = '') {
+    const trimmed = userPrompt.trim();
+    const contextLine = trimmed
+        ? `Screenshot context: ${trimmed}`
+        : 'Screenshot context: Visual content only (no extra user text).';
+    return `${contextLine}\n\nRules:\n- Describe only what is visible and give the most helpful next action in ≤3 sentences.\n- **Do NOT** solve LeetCode/LC or coding-challenge problems from this button. If the capture looks like a coding challenge, politely remind the user to use the Leet button instead.\n- Otherwise, keep the response practical and concise.`;
+}
+
+function buildManualLeetRefusalPrompt(userPrompt = '') {
+    const reason = userPrompt ? `User hint: ${userPrompt}` : 'The user appears to be on a LeetCode page.';
+    return `${reason}\n\nInstruction: The user pressed the general screenshot button for a LeetCode problem. Politely refuse to solve it and tell them to press the dedicated "Leet" button to get coding help.`;
+}
+
+async function sendManualScreenshotPrompt(manualPrompt = '') {
+    const trimmed = (manualPrompt || '').trim();
+    const message = isLikelyLeetCodeContext(trimmed)
+        ? buildManualLeetRefusalPrompt(trimmed)
+        : buildManualScreenshotPrompt(trimmed);
+    return sendTextMessage(message);
+}
+
+async function sendLeetScreenshotPrompt(manualPrompt = '') {
+    return sendTextMessage(buildLeetScreenshotPrompt(manualPrompt || ''));
 }
 
 // Conversation storage functions using IndexedDB
@@ -869,12 +1017,16 @@ function initializeInputBuffer() {
             console.log('📝 Partial transcript:', transcript);
             // Update UI with partial transcript
             emitAppEvent('partial-transcript', { text: transcript });
+            maybeEmitInterviewerQuestion(transcript, 'partial-transcript');
         };
         
         inputBuffer.onFinalInput = (inputData) => {
             console.log('✅ Final input ready:', inputData);
             // Notify UI that input is complete and processing
             emitAppEvent('input-finalized', inputData);
+            if (inputData?.textContent) {
+                maybeEmitInterviewerQuestion(inputData.textContent, 'input-finalized');
+            }
         };
         
         inputBuffer.onStateChange = (newState, oldState) => {
@@ -927,6 +1079,42 @@ if (!enoraTheEonApp) {
         }
     };
     waitForApp();
+}
+
+// Interviewer question detection helpers
+const QUESTION_KEYWORDS = ['why', 'what', 'how', 'where', 'when', 'which', 'who', 'can you', 'could you', 'would you', 'will you', 'did you', 'explain', 'tell me', 'walk me', 'help me understand'];
+let lastInterviewerQuestion = {
+    fingerprint: null,
+    timestamp: 0,
+};
+
+function normalizeQuestionText(rawText = '') {
+    return rawText.replace(/\s+/g, ' ').trim();
+}
+
+function looksLikeQuestion(text) {
+    if (!text || text.length < 4) return false;
+    const lower = text.toLowerCase();
+    if (lower.endsWith('?')) return true;
+    return QUESTION_KEYWORDS.some(keyword => lower.startsWith(`${keyword} `) || lower.includes(` ${keyword} `));
+}
+
+function maybeEmitInterviewerQuestion(text, source = 'unknown') {
+    const normalized = normalizeQuestionText(text);
+    if (!looksLikeQuestion(normalized)) return;
+
+    const fingerprint = normalized.replace(/[?.!,]/g, '').toLowerCase();
+    const now = Date.now();
+    if (fingerprint && fingerprint === lastInterviewerQuestion.fingerprint && now - lastInterviewerQuestion.timestamp < 1500) {
+        return;
+    }
+
+    lastInterviewerQuestion = { fingerprint, timestamp: now };
+    emitAppEvent('interviewer-question', {
+        text: normalized,
+        source,
+        timestamp: now,
+    });
 }
 
 // Enhanced text input handling
