@@ -19,7 +19,7 @@ export class AssistantView extends LitElement {
             border-radius: 10px;
             font-size: var(--response-font-size, 18px);
             line-height: 1.6;
-            background: var(--main-content-background);
+            background: var(--assistant-surface-background);
             padding: 16px;
             scroll-behavior: smooth;
             user-select: text;
@@ -125,6 +125,60 @@ export class AssistantView extends LitElement {
             background: none;
             padding: 0;
             border-radius: 0;
+            display: block;
+        }
+
+        /* Highlight.js theme overrides scoped to the shadow DOM */
+        .response-container pre code.hljs {
+            color: #e9eef7;
+            background: transparent;
+        }
+
+        .hljs-comment,
+        .hljs-quote {
+            color: #607d8b;
+            font-style: italic;
+        }
+
+        .hljs-keyword,
+        .hljs-selector-tag,
+        .hljs-subst {
+            color: #c792ea;
+        }
+
+        .hljs-number,
+        .hljs-literal,
+        .hljs-variable,
+        .hljs-template-variable,
+        .hljs-tag .hljs-attr {
+            color: #f78c6c;
+        }
+
+        .hljs-string,
+        .hljs-doctag,
+        .hljs-addition {
+            color: #c3e88d;
+        }
+
+        .hljs-attribute,
+        .hljs-name,
+        .hljs-builtin-name {
+            color: #82aaff;
+        }
+
+        .hljs-section,
+        .hljs-title,
+        .hljs-selector-id,
+        .hljs-selector-class {
+            color: #ffc777;
+        }
+
+        .hljs-emphasis {
+            font-style: italic;
+        }
+
+        .hljs-strong {
+            font-weight: 600;
         }
 
         .response-container a {
@@ -409,6 +463,21 @@ export class AssistantView extends LitElement {
         return doc.body.innerHTML;
     }
 
+    highlightCodeBlocks() {
+        if (typeof window === 'undefined' || !window.hljs) {
+            return;
+        }
+
+        const container = this.shadowRoot?.querySelector('#responseContainer');
+        if (!container) {
+            return;
+        }
+
+        container.querySelectorAll('pre code').forEach(block => {
+            window.hljs.highlightElement(block);
+        });
+    }
+
     getResponseCounter() {
         return this.responses.length > 0 ? `${this.currentResponseIndex + 1}/${this.responses.length}` : '';
     }
@@ -643,6 +712,7 @@ export class AssistantView extends LitElement {
                 words.forEach(word => word.classList.add('visible'));
                 this._lastAnimatedWordCount = words.length;
             }
+            this.highlightCodeBlocks();
         } else {
             console.log('Response container not found');
         }

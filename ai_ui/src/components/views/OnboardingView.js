@@ -19,20 +19,20 @@ export class OnboardingView extends LitElement {
 
         :host {
             display: block;
-            height: 100%;
-            width: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-            overflow: hidden;
+            min-height: 100vh;
+            width: 100vw;
+            position: relative;
+            overflow: auto;
+            padding-bottom: 140px;
         }
 
         .onboarding-container {
             position: relative;
             width: 100%;
-            height: 100%;
+            min-height: 100vh;
             background: #0a0a0a;
             overflow: hidden;
+            padding-bottom: 200px;
         }
 
         .gradient-canvas {
@@ -45,19 +45,21 @@ export class OnboardingView extends LitElement {
         }
 
         .content-wrapper {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 60px;
+            position: relative;
             z-index: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 32px 48px;
-            max-width: 500px;
+            padding: 96px 24px 160px;
+            max-width: 640px;
             color: #e5e5e5;
-            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 768px) {
+            .content-wrapper {
+                padding: 72px 16px 220px;
+            }
         }
 
         .slide-icon {
@@ -129,37 +131,55 @@ export class OnboardingView extends LitElement {
         }
 
         .navigation {
-            position: absolute;
-            bottom: 0;
+            position: fixed;
             left: 0;
             right: 0;
-            z-index: 2;
+            bottom: 0;
+            z-index: 5;
+            padding: 16px 32px 24px;
+            background: linear-gradient(180deg, rgba(10, 10, 10, 0) 0%, rgba(5, 5, 5, 0.9) 35%, rgba(0, 0, 0, 0.95) 100%);
+            box-sizing: border-box;
+        }
+
+        .navigation-inner {
+            max-width: 960px;
+            margin: 0 auto;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 24px;
             padding: 16px 24px;
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            height: 60px;
-            box-sizing: border-box;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(18px);
         }
 
         .nav-button {
             background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             color: #e5e5e5;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
+            padding: 10px 22px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 36px;
-            min-height: 36px;
+            gap: 10px;
+            min-width: 120px;
+            min-height: 42px;
+            white-space: nowrap;
+        }
+
+        .nav-button svg {
+            flex-shrink: 0;
+        }
+
+        .nav-button span {
+            display: inline-block;
         }
 
         .nav-button:hover {
@@ -186,13 +206,15 @@ export class OnboardingView extends LitElement {
             display: flex;
             gap: 12px;
             align-items: center;
+            justify-content: center;
+            flex: 1;
         }
 
         .dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.25);
             transition: all 0.2s ease;
             cursor: pointer;
         }
@@ -372,7 +394,7 @@ export class OnboardingView extends LitElement {
         const slides = [
             {
                 icon: 'assets/onboarding/welcome.svg',
-                title: 'Welcome to SahAI',
+                title: 'Welcome to The EON',
                 content: 'Your AI assistant that listens and watches, then provides intelligent suggestions automatically during interviews and meetings.',
             },
             {
@@ -453,34 +475,43 @@ export class OnboardingView extends LitElement {
                 </div>
 
                 <div class="navigation">
-                    <button class="nav-button" @click=${this.prevSlide} ?disabled=${this.currentSlide === 0}>
-                        <svg width="16px" height="16px" stroke-width="2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                        </svg>
-                    </button>
+                    <div class="navigation-inner">
+                        <button class="nav-button" @click=${this.prevSlide} ?disabled=${this.currentSlide === 0}>
+                            <svg width="16px" height="16px" stroke-width="2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                            </svg>
+                            <span>Back</span>
+                        </button>
 
-                    <div class="progress-dots">
-                        ${[0, 1, 2, 3, 4].map(
-                            i => html`
-                                <div
-                                    class="dot ${i === this.currentSlide ? 'active' : ''}"
-                                    @click=${() => {
-                                        if (i !== this.currentSlide) this.startColorTransition(i);
-                                    }}
-                                ></div>
-                            `
-                        )}
+                        <div class="progress-dots">
+                            ${[0, 1, 2, 3, 4].map(
+                                i => html`
+                                    <div
+                                        class="dot ${i === this.currentSlide ? 'active' : ''}"
+                                        @click=${() => {
+                                            if (i !== this.currentSlide) this.startColorTransition(i);
+                                        }}
+                                    ></div>
+                                `
+                            )}
+                        </div>
+
+                        <button class="nav-button" @click=${this.nextSlide}>
+                            ${this.currentSlide === 4
+                                ? html`
+                                      <span>Get Started</span>
+                                      <svg width="16px" height="16px" stroke-width="2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                                      </svg>
+                                  `
+                                : html`
+                                      <span>Next</span>
+                                      <svg width="16px" height="16px" stroke-width="2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                                      </svg>
+                                  `}
+                        </button>
                     </div>
-
-                    <button class="nav-button" @click=${this.nextSlide}>
-                        ${this.currentSlide === 4
-                            ? 'Get Started'
-                            : html`
-                                  <svg width="16px" height="16px" stroke-width="2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                      <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                                  </svg>
-                              `}
-                    </button>
                 </div>
             </div>
         `;

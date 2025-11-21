@@ -33,6 +33,7 @@ function createWindow(sendToRenderer, geminiSessionRef, randomNames = null) {
     const mainWindow = new BrowserWindow({
         width: windowWidth,
         height: windowHeight,
+        resizable: true,
         frame: false,
         transparent: true,
         hasShadow: false,
@@ -60,7 +61,6 @@ function createWindow(sendToRenderer, geminiSessionRef, randomNames = null) {
         { useSystemPicker: true }
     );
 
-    mainWindow.setResizable(false);
     mainWindow.setContentProtection(true);
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
@@ -381,6 +381,24 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
+    ipcMain.handle('set-manual-resize-lock', async (event, { enabled }) => {
+        try {
+            if (mainWindow.isDestroyed()) {
+                return { success: false, error: 'Window has been destroyed' };
+            }
+
+            if (enabled) {
+                mainWindow.setResizable(false);
+            } else {
+                mainWindow.setResizable(true);
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('Error toggling manual resize lock:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
     function animateWindowResize(mainWindow, targetWidth, targetHeight, layoutMode) {
         return new Promise(resolve => {
             // Check if window is destroyed before starting animation
@@ -449,12 +467,13 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
 
                     // Check if window is still valid before final operations
                     if (!mainWindow.isDestroyed()) {
-                        mainWindow.setResizable(false);
-
                         // Ensure final size is exact
                         mainWindow.setSize(targetWidth, targetHeight);
                         const finalX = Math.floor((screenWidth - targetWidth) / 2);
                         mainWindow.setPosition(finalX, 0);
+
+                        // Leave the window resizable so users can adjust manually afterward
+                        mainWindow.setResizable(true);
                     }
 
                     console.log(`Animation complete: ${targetWidth}x${targetHeight}`);

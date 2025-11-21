@@ -58,17 +58,6 @@ export class AppHeader extends LitElement {
             color: var(--header-actions-color);
         }
 
-        .button {
-            background: var(--button-background);
-            color: var(--text-color);
-            border: 1px solid var(--button-border);
-            padding: var(--header-button-padding);
-            border-radius: 8px;
-            font-size: var(--header-font-size-small);
-            font-weight: 500;
-            transition: background 0.2s ease, opacity 0.2s ease;
-        }
-
         .icon-button {
             background: none;
             color: var(--icon-button-color);
@@ -92,26 +81,8 @@ export class AppHeader extends LitElement {
             opacity: 1;
         }
 
-        .button:hover {
-            background: var(--hover-background);
-        }
-
-        .button.fast-mode-active {
-            border-color: var(--success-border, rgba(52, 211, 153, 0.4));
-            color: var(--success-color, #34d399);
-        }
-
-        :host([isclickthrough]) .button:hover,
         :host([isclickthrough]) .icon-button:hover {
             background: transparent;
-        }
-
-        .key {
-            background: var(--key-background);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin: 0px;
         }
     `;
 
@@ -128,14 +99,8 @@ export class AppHeader extends LitElement {
         isClickThrough: { type: Boolean, reflect: true },
         advancedMode: { type: Boolean },
         onAdvancedClick: { type: Function },
-        onManualScreenshot: { type: Function },
-        fastMode: { type: Boolean },
-        onFastModeToggle: { type: Function },
-        onRestartCapture: { type: Function },
-        onFullReset: { type: Function },
         connectionHealth: { type: Object },
         connectionAlert: { type: Object },
-        onForceReconnect: { type: Function },
     };
 
     constructor() {
@@ -152,14 +117,8 @@ export class AppHeader extends LitElement {
         this.isClickThrough = false;
         this.advancedMode = false;
         this.onAdvancedClick = () => {};
-        this.onManualScreenshot = () => {};
-        this.fastMode = false;
-        this.onFastModeToggle = () => {};
-        this.onRestartCapture = () => {};
-        this.onFullReset = () => {};
         this.connectionHealth = null;
         this.connectionAlert = null;
-        this.onForceReconnect = () => {};
         this._timerInterval = null;
     }
 
@@ -223,7 +182,7 @@ export class AppHeader extends LitElement {
             help: 'Help & Shortcuts',
             history: 'Conversation History',
             advanced: 'Advanced Tools',
-            assistant: 'Enora The Eon Assistant',
+            assistant: 'Enora The Eon',
         };
         return titles[this.currentView] || 'Enora The Eon';
     }
@@ -419,25 +378,6 @@ export class AppHeader extends LitElement {
                         : ''}
                     ${this.currentView === 'assistant'
                         ? html`
-                              <button @click=${this.onManualScreenshot} class="button" title="Send manual screenshot">
-                                  Send Screenshot
-                              </button>
-                              <button
-                                  @click=${this.onFastModeToggle}
-                                  class="button ${this.fastMode ? 'fast-mode-active' : ''}"
-                                  title="Toggle performance mode"
-                              >
-                                  Fast Mode: ${this.fastMode ? 'On' : 'Off'}
-                              </button>
-                              <button @click=${this.onForceReconnect} class="button" title="Force session reconnect">
-                                  Force Reconnect
-                              </button>
-                              <button @click=${this.onRestartCapture} class="button" title="Restart capture stream">
-                                  Restart Capture
-                              </button>
-                              <button @click=${this.onFullReset} class="button" title="Restart capture and listening pipelines">
-                                  Reset Stream
-                              </button>
                               <button class="icon-button" @click=${this.onCustomizeClick} title="Customize">
                                   <?xml version="1.0" encoding="UTF-8"?><svg
                                       width="24px"
@@ -463,10 +403,6 @@ export class AppHeader extends LitElement {
                                           stroke-linejoin="round"
                                       ></path>
                                   </svg>
-                              </button>
-                              <button @click=${this.onHideToggleClick} class="button">
-                                  Hide&nbsp;&nbsp;<span class="key" style="pointer-events: none;">${cheddar.isMacOS ? 'Cmd' : 'Ctrl'}</span
-                                  >&nbsp;&nbsp;<span class="key">&bsol;</span>
                               </button>
                               <button @click=${this.onCloseClick} class="icon-button window-close">
                                   <?xml version="1.0" encoding="UTF-8"?><svg

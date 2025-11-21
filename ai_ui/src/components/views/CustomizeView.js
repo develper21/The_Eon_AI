@@ -459,6 +459,11 @@ export class CustomizeView extends LitElement {
         resizeLayout();
     }
 
+    disconnectedCallback() {
+        this.closeOpenDropdowns();
+        super.disconnectedCallback();
+    }
+
     getProfiles() {
         return [
             {
@@ -550,6 +555,27 @@ export class CustomizeView extends LitElement {
         this.selectedLanguage = e.target.value;
         localStorage.setItem('selectedLanguage', this.selectedLanguage);
         this.onLanguageChange(this.selectedLanguage);
+    }
+
+    closeOpenDropdowns() {
+        const blurSelect = select => {
+            if (select && typeof select.blur === 'function') {
+                select.blur();
+            }
+        };
+
+        if (this.shadowRoot) {
+            blurSelect(this.shadowRoot.activeElement);
+            this.shadowRoot.querySelectorAll('select').forEach(select => {
+                if (select === document.activeElement || select.matches(':focus')) {
+                    blurSelect(select);
+                }
+            });
+        }
+
+        if (document && document.activeElement && document.activeElement.tagName === 'SELECT') {
+            blurSelect(document.activeElement);
+        }
     }
 
     handleScreenshotIntervalSelect(e) {
@@ -826,6 +852,7 @@ export class CustomizeView extends LitElement {
         const root = document.documentElement;
         root.style.setProperty('--header-background', `rgba(0, 0, 0, ${this.backgroundTransparency})`);
         root.style.setProperty('--main-content-background', `rgba(0, 0, 0, ${this.backgroundTransparency})`);
+        root.style.setProperty('--assistant-surface-background', `rgba(0, 0, 0, ${this.backgroundTransparency * 0.5})`);
         root.style.setProperty('--card-background', `rgba(255, 255, 255, ${this.backgroundTransparency * 0.05})`);
         root.style.setProperty('--input-background', `rgba(0, 0, 0, ${this.backgroundTransparency * 0.375})`);
         root.style.setProperty('--input-focus-background', `rgba(0, 0, 0, ${this.backgroundTransparency * 0.625})`);

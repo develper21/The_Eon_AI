@@ -1,5 +1,6 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 import { AppHeader } from './AppHeader.js';
+import './AppHeaderControls.js';
 import { MainView } from '../views/MainView.js';
 import { CustomizeView } from '../views/CustomizeView.js';
 import { HelpView } from '../views/HelpView.js';
@@ -37,6 +38,10 @@ export class EnoraTheEonApp extends LitElement {
             display: flex;
             flex-direction: column;
             height: 100%;
+        }
+
+        .assistant-controls-wrapper {
+            margin-top: 8px;
         }
 
         .main-content {
@@ -180,6 +185,7 @@ export class EnoraTheEonApp extends LitElement {
         _awaitingNewResponse: { state: true },
         shouldAnimateResponse: { type: Boolean },
         autoResetAfterResponse: { type: Boolean },
+        assistantStatusChip: { type: String },
     };
 
     constructor() {
@@ -215,6 +221,10 @@ export class EnoraTheEonApp extends LitElement {
         this._autoResetInProgress = false;
         this.connectionHealth = null;
         this.connectionAlert = null;
+        this.pendingQuestions = [];
+        this._activeQuestion = null;
+        this._questionResponseIndex = null;
+        this.assistantStatusChip = '';
 
         // Apply layout mode to document root
         this.updateLayoutMode();
@@ -227,7 +237,14 @@ export class EnoraTheEonApp extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.on('update-response', (_, response) => {
-                this.setResponse(response);
+                let payload = response;
+                if (this._activeQuestion) {
+                    payload = this.formatQuestionResponse(this._activeQuestion, response);
+                }
+                this.setResponse(payload);
+                if (this._activeQuestion) {
+                    this._questionResponseIndex = this.currentResponseIndex;
+                }
             });
             ipcRenderer.on('update-status', (_, status) => {
                 this.setStatus(status);
@@ -295,7 +312,21 @@ export class EnoraTheEonApp extends LitElement {
             }
         };
 
+        this._leetScreenshotHandler = async () => {
+            try {
+                if (typeof window.captureLeetScreenshot === 'function') {
+                    await window.captureLeetScreenshot();
+                } else {
+                    throw new Error('Leet screenshot module not loaded');
+                }
+            } catch (error) {
+                console.error('Leet screenshot failed:', error);
+                this.setStatus('Leet screenshot failed: ' + (error?.message || 'unknown error'));
+            }
+        };
+
         this.handleManualScreenshotWithText = this._manualScreenshotHandler;
+        this.handleLeetScreenshot = this._leetScreenshotHandler;
 
         this._connectionMetricsListener = event => {
             this.connectionHealth = event.detail || null;
@@ -311,6 +342,11 @@ export class EnoraTheEonApp extends LitElement {
             this.requestUpdate();
         };
         window.addEventListener('connection-alert', this._connectionAlertListener);
+
+        this._interviewerQuestionListener = event => {
+            this.enqueueInterviewerQuestion(event.detail || {});
+        };
+        window.addEventListener('interviewer-question', this._interviewerQuestionListener);
     }
 
     disconnectedCallback() {
@@ -351,7 +387,171 @@ export class EnoraTheEonApp extends LitElement {
             window.removeEventListener('connection-alert', this._connectionAlertListener);
         }
 
+        if (this._interviewerQuestionListener) {
+            window.removeEventListener('interviewer-question', this._interviewerQuestionListener);
+        }
+
         this.clearResponseWatchdog();
+    }
+
+    enqueueInterviewerQuestion(questionDetail) {
+        const normalizedText = (questionDetail.text || '').trim();
+        if (!normalizedText) {
+            return;
+        }
+
+        const snapshot = this.createQuestionSnapshot();
+        const payload = {
+            id: `${questionDetail.timestamp || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            text: normalizedText,
+            source: questionDetail.source || 'unknown',
+            timestamp: questionDetail.timestamp || Date.now(),
+            snapshot,
+            status: 'queued',
+        };
+
+        this.pendingQuestions = [...this.pendingQuestions, payload];
+        console.log('[InterviewerQuestion] Queued', payload);
+        this.requestUpdate();
+        this.processPendingQuestions();
+    }
+
+    createQuestionSnapshot() {
+        const currentResponse =
+            this.responses.length > 0 && this.currentResponseIndex >= 0
+                ? this.responses[this.currentResponseIndex]
+                : '';
+
+        return {
+            view: this.currentView,
+            profile: this.selectedProfile,
+            fastMode: this.fastMode,
+            currentResponseIndex: this.currentResponseIndex,
+            totalResponses: this.responses.length,
+            currentResponse,
+            latestDraft: this.latestDraftMessage,
+            manualScreenshotStatus: this.manualScreenshotStatus,
+            connectionHealth: this.connectionHealth,
+        };
+    }
+
+    ensureInterviewPerformanceMode() {
+        if (this.currentView === 'assistant' && !this.fastMode) {
+            console.log('[Performance] Enforcing fast mode for assistant view');
+            this.handleFastModeChange(true);
+            this.handleRestartCapture();
+        }
+        if (this.currentView !== 'assistant' && this.assistantStatusChip) {
+            this.updateAssistantStatusChip();
+        }
+    }
+
+    updateAssistantStatusChip() {
+        let nextChip = '';
+        if (this._activeQuestion) {
+            nextChip = 'Answering interviewer…';
+        } else if (this.currentView === 'assistant' && this.fastMode) {
+            nextChip = 'Fast mode · +1% speed';
+        }
+
+        if (nextChip !== this.assistantStatusChip) {
+            this.assistantStatusChip = nextChip;
+        }
+    }
+
+    processPendingQuestions() {
+        if (this._activeQuestion) {
+            return;
+        }
+
+        const next = this.pendingQuestions.find(question => question.status === 'queued');
+        if (!next) {
+            return;
+        }
+
+        this.answerInterviewerQuestion(next);
+    }
+
+    async answerInterviewerQuestion(question) {
+        if (!window.cheddar || typeof window.cheddar.sendTextMessage !== 'function') {
+            console.warn('Cheddar sendTextMessage not available, cannot answer interviewer question');
+            return;
+        }
+
+        this._activeQuestion = question;
+        this._questionResponseIndex = null;
+        this.updateAssistantStatusChip();
+        this.updatePendingQuestion(question.id, { status: 'answering', startedAt: Date.now() });
+        this.setStatus('Answering interviewer…');
+
+        const prompt = this.buildQuestionPrompt(question);
+        this._awaitingNewResponse = true;
+
+        try {
+            const result = await window.cheddar.sendTextMessage(prompt);
+            if (!result?.success) {
+                throw new Error(result?.error || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Failed to answer interviewer question:', error);
+            this.completeActiveQuestion(false, error?.message || 'Failed to send question');
+        }
+    }
+
+    buildQuestionPrompt(question) {
+        const snapshot = question.snapshot || {};
+        const contextLines = [
+            'The interviewer just asked the following question. Provide a concise, spoken-style answer the candidate can say verbatim.',
+            '',
+            `Question: ${question.text}`,
+            '',
+            'Context:',
+            `- Current view: ${snapshot.view || 'unknown'}`,
+            `- Selected profile: ${snapshot.profile || 'interview'}`,
+            `- Fast mode: ${snapshot.fastMode ? 'enabled' : 'disabled'}`,
+            `- Latest draft: ${snapshot.latestDraft || 'N/A'}`,
+            `- Current response snippet: ${(snapshot.currentResponse || '').slice(0, 400) || 'N/A'}`,
+        ];
+
+        return contextLines.join('\n');
+    }
+
+    formatQuestionResponse(question, answerText) {
+        const questionLine = `**Q (Interviewer):** ${question.text}`;
+        const answerLine = `**A (You):** ${answerText}`;
+        return `${questionLine}\n\n${answerLine}`;
+    }
+
+    completeActiveQuestion(success, errorMessage = '') {
+        if (!this._activeQuestion) {
+            return;
+        }
+
+        const statusUpdate = success ? { status: 'answered', completedAt: Date.now() } : { status: 'error', error: errorMessage };
+        this.updatePendingQuestion(this._activeQuestion.id, statusUpdate);
+        this._activeQuestion = null;
+        this._questionResponseIndex = null;
+        this.updateAssistantStatusChip();
+
+        if (success) {
+            this.setStatus('Ready');
+        } else {
+            this.setStatus('Question answer failed');
+        }
+
+        this.processPendingQuestions();
+    }
+
+    updatePendingQuestion(questionId, updates = {}) {
+        this.pendingQuestions = this.pendingQuestions.map(question =>
+            question.id === questionId
+                ? {
+                      ...question,
+                      ...updates,
+                  }
+                : question
+        );
+        this.requestUpdate();
     }
 
     setStatus(text) {
@@ -362,6 +562,9 @@ export class EnoraTheEonApp extends LitElement {
         if (text.includes('Ready') || text.includes('Listening') || text.includes('Error')) {
             this._currentResponseIsComplete = true;
             console.log('[setStatus] Marked current response as complete');
+            if (this._activeQuestion && text.includes('Ready')) {
+                this.completeActiveQuestion(true);
+            }
             if (wasIncomplete) {
                 this.handleResponseCompleted();
             }
@@ -570,6 +773,8 @@ export class EnoraTheEonApp extends LitElement {
             localStorage.setItem('selectedScreenshotInterval', 'manual');
             localStorage.setItem('selectedImageQuality', 'low');
         }
+
+        this.updateAssistantStatusChip();
     }
 
     handleBackClick() {
@@ -657,6 +862,17 @@ export class EnoraTheEonApp extends LitElement {
                     viewContainer.classList.remove('entering');
                 });
             }
+        }
+
+        if (
+            (changedProperties.has('currentView') || changedProperties.has('fastMode')) &&
+            this.currentView === 'assistant'
+        ) {
+            this.ensureInterviewPerformanceMode();
+        }
+
+        if (changedProperties.has('currentView') || changedProperties.has('fastMode')) {
+            this.updateAssistantStatusChip();
         }
 
         // Only update localStorage when these specific properties change
@@ -767,7 +983,6 @@ export class EnoraTheEonApp extends LitElement {
                         .connectionHealth=${this.connectionHealth}
                         .connectionAlert=${this.connectionAlert}
                         .advancedMode=${this.advancedMode}
-                        .fastMode=${this.fastMode}
                         .onCustomizeClick=${() => this.handleCustomizeClick()}
                         .onHelpClick=${() => this.handleHelpClick()}
                         .onHistoryClick=${() => this.handleHistoryClick()}
@@ -775,13 +990,24 @@ export class EnoraTheEonApp extends LitElement {
                         .onCloseClick=${() => this.handleClose()}
                         .onBackClick=${() => this.handleBackClick()}
                         .onHideToggleClick=${() => this.handleHideToggle()}
-                        .onManualScreenshot=${() => this._manualScreenshotHandler()}
-                        .onFastModeToggle=${() => this.handleFastModeChange(!this.fastMode)}
-                        .onRestartCapture=${() => this.handleRestartCapture()}
-                        .onFullReset=${() => this.handleFullReset()}
-                        .onForceReconnect=${() => this.handleForceReconnect()}
                         ?isClickThrough=${this._isClickThrough}
                     ></app-header>
+                    ${this.currentView === 'assistant'
+                        ? html`
+                              <div class="assistant-controls-wrapper">
+                                  <app-header-controls
+                                      .fastMode=${this.fastMode}
+                                      .onManualScreenshot=${() => this._manualScreenshotHandler()}
+                                      .onLeetScreenshot=${() => this._leetScreenshotHandler()}
+                                      .onFastModeToggle=${() => this.handleFastModeChange(!this.fastMode)}
+                                      .onForceReconnect=${() => this.handleForceReconnect()}
+                                      .onRestartCapture=${() => this.handleRestartCapture()}
+                                      .onFullReset=${() => this.handleFullReset()}
+                                      .onHideToggleClick=${() => this.handleHideToggle()}
+                                  ></app-header-controls>
+                              </div>
+                          `
+                        : ''}
                     <div class="${mainContentClass}">
                         ${this.captureError && this.currentView === 'assistant'
                             ? html`
