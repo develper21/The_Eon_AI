@@ -10,6 +10,7 @@ class EnoraLoader {
         this.stepInterval = null;
         this.hideTimeout = null;
         this.responseStarted = false; // Track if response has started
+        this.globalBlock = false; // Global block to prevent any loader during response
     }
 
     init() {
@@ -28,14 +29,14 @@ class EnoraLoader {
     }
 
     show(message = 'Processing your request', subtext = 'AI is thinking...') {
-        // Don't show loader if response has already started
-        if (this.responseStarted) {
-            console.log('🚫 Loader blocked - response already started');
+        // AGGRESSIVE BLOCKING - Don't show loader if ANY blocking condition is met
+        if (this.responseStarted || this.globalBlock) {
+            console.log('🚫🚫 LOADER BLOCKED - response in progress');
             return;
         }
         
-        // Don't show loader if it was recently hidden (within 1 second)
-        if (this._lastHideTime && (Date.now() - this._lastHideTime) < 1000) {
+        // Don't show loader if it was recently hidden (within 2 seconds)
+        if (this._lastHideTime && (Date.now() - this._lastHideTime) < 2000) {
             console.log('🚫 Loader blocked - recently hidden');
             return;
         }
@@ -64,8 +65,9 @@ class EnoraLoader {
     hide() {
         if (!this.isLoading) return;
         
-        // Mark that response has started - prevent loader from showing again
+        // AGGRESSIVE BLOCKING - Set all block flags to prevent any re-showing
         this.responseStarted = true;
+        this.globalBlock = true;
         this._lastHideTime = Date.now(); // Track when loader was hidden
         
         // Clear any existing hide timeout
@@ -80,7 +82,7 @@ class EnoraLoader {
             this.stopStepAnimation();
             this.removeLoadingElements();
             this.hideTimeout = null;
-            console.log('✅ Loader hidden');
+            console.log('✅ Loader hidden - ALL BLOCKS ACTIVE');
         }, 200); // 200ms delay
     }
 
@@ -99,8 +101,9 @@ class EnoraLoader {
 
     // Reset for new question
     resetForNewQuestion() {
-        console.log('🔄 Resetting loader for new question');
+        console.log('🔄 RESET - Clearing ALL blocks for new question');
         this.responseStarted = false;
+        this.globalBlock = false; // Clear global block
         this._lastHideTime = 0; // Reset hide time
         this._lastAnimatedWordCount = 0;
         this._lastRenderedResponse = '';
@@ -108,6 +111,25 @@ class EnoraLoader {
         // Force hide any existing loader
         if (this.isLoading) {
             this.hide();
+        }
+    }
+
+    // Emergency stop - force hide and block all future loaders
+    emergencyStop() {
+        console.log('🚨 EMERGENCY STOP - Force hiding and blocking all loaders');
+        this.globalBlock = true;
+        this.responseStarted = true;
+        
+        if (this.isLoading) {
+            this.isLoading = false;
+            this.stopStepAnimation();
+            this.removeLoadingElements();
+        }
+        
+        // Clear any timeouts
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
         }
     }
 
