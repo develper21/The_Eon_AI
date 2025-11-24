@@ -1,12 +1,15 @@
+const path = require('node:path');
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+
+const iconPath = path.resolve(__dirname, 'src', 'assets', 'old', '0.3', 'favicon.png');
 
 module.exports = {
     packagerConfig: {
         asar: true,
         extraResource: ['./src/assets/SystemAudioDump'],
         name: 'EON AI',
-        icon: '/src/assets/old/0.3/favicon.png',
+        icon: iconPath,
         // use `security find-identity -v -p codesigning` to find your identity
         // for macos signing
         // also fuck apple
