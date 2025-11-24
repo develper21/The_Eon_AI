@@ -75,7 +75,7 @@ async function checkVersion() {
     const currentVersion = app.getVersion();  // version from package.json
 
     try {
-        const response = await fetch("https://raw.githubusercontent.com/develper21/THE_EON_AI_RELEASES/main/access_config/version.json");  
+        const response = await fetch("https://raw.githubusercontent.com/develper21/access_config/main/access_config/version.json");  
         const data = await response.json();
 
         if (data.version !== currentVersion) {
