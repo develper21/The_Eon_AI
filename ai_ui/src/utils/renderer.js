@@ -1,4 +1,6 @@
-async function waitForNextVideoFrame(video, maxWait = 250) {
+const FRAME_WAIT_TIMEOUT_MS = 1200;
+
+async function waitForNextVideoFrame(video, maxWait = FRAME_WAIT_TIMEOUT_MS) {
     if (!video) return;
     return new Promise(resolve => {
         let finished = false;
@@ -117,6 +119,16 @@ async function prepareCaptureSurfaces(forceFullResolution = false) {
 }
 // renderer.js - Enhanced Enora The Eon Input System
 const { ipcRenderer } = require('electron');
+const path = require('node:path');
+
+let buildLeetScreenshotPrompt;
+try {
+    ({ buildLeetScreenshotPrompt } = require(path.join(__dirname, 'utils', 'leetAssistant')));
+} catch (error) {
+    console.error('Failed to load leetAssistant module:', error);
+    buildLeetScreenshotPrompt = () =>
+        'Leet prompt helper missing. Please reinstall or contact support before using the Leet feature.';
+}
 
 // InputBuffer is provided via global script include (utils/inputBuffer.js)
 const InputBuffer = window.InputBuffer;
@@ -153,6 +165,7 @@ let audioBuffer = [];
 const SAMPLE_RATE = 24000;
 const AUDIO_CHUNK_DURATION = 0.1; // seconds
 const BUFFER_SIZE = 4096; // Increased buffer size for smoother audio
+const SCREEN_CAPTURE_FRAMERATE = 3; // Higher FPS for fresher manual captures
 
 let hiddenVideo = null;
 let offscreenCanvas = null;
@@ -348,7 +361,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             // Get screen capture for screenshots
             mediaStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
-                    frameRate: 1,
+                    frameRate: SCREEN_CAPTURE_FRAMERATE,
                     width: { ideal: 1920 },
                     height: { ideal: 1080 },
                 },
@@ -382,7 +395,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
                 // First try to get system audio via getDisplayMedia (works on newer browsers)
                 mediaStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        frameRate: 1,
+                        frameRate: SCREEN_CAPTURE_FRAMERATE,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 },
                     },
@@ -405,7 +418,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
                 // Fallback to screen-only capture
                 mediaStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        frameRate: 1,
+                        frameRate: SCREEN_CAPTURE_FRAMERATE,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 },
                     },
@@ -443,7 +456,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             // Windows - use display media with loopback for system audio
             mediaStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
-                    frameRate: 1,
+                    frameRate: SCREEN_CAPTURE_FRAMERATE,
                     width: { ideal: 1920 },
                     height: { ideal: 1080 },
                 },
@@ -623,6 +636,12 @@ function setupWindowsLoopbackProcessing() {
 
 async function captureScreenshot(imageQuality = 'medium', isManual = false, manualPrompt = '', options = {}) {
     const { forceFullResolution = false, manualModeTag = null } = options || {};
+    const frameHash = () => {
+        if (!offscreenCanvas) return 'no-canvas';
+        const ctx = offscreenContext;
+        const img = ctx.getImageData(0, 0, 1, 1).data;
+        return img.slice(0, 3).join('-');
+    };
     const emitManualStatus = (state, extra = {}) => {
         if (!isManual) return;
         emitAppEvent('manual-screenshot-status', {
@@ -677,6 +696,21 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
     }
 
     await drawLatestFrame(forceFullResolution);
+
+    // Log frame hash for debugging freshness
+    const beforeHash = frameHash();
+    console.log(`🔍 Frame hash before capture: ${beforeHash}`);
+    
+    // Additional freshness check: verify we have a non-black frame
+    const centerPixel = offscreenContext.getImageData(
+        Math.floor(offscreenCanvas.width / 2),
+        Math.floor(offscreenCanvas.height / 2),
+        1, 1
+    ).data;
+    const isCenterBlank = centerPixel.slice(0, 3).every(v => v === 0);
+    if (isCenterBlank) {
+        console.warn('⚠️ Center pixel is black - possible stale frame');
+    }
 
     // Check if image was drawn properly by sampling a pixel
     const imageData = offscreenContext.getImageData(0, 0, 1, 1);
@@ -738,10 +772,11 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
                         tokenTracker.addTokens(imageTokens, 'image');
                         console.log(`📊 Image sent successfully - ${imageTokens} tokens used (${offscreenCanvas.width}x${offscreenCanvas.height})`);
                         if (isManual) {
-                            const promptResult =
-                                manualModeTag === 'leet'
-                                    ? await sendLeetScreenshotPrompt(manualPrompt)
-                                    : await sendManualScreenshotPrompt(manualPrompt);
+                            const builtPrompt = manualModeTag === 'leet'
+                                ? buildLeetScreenshotPrompt(manualPrompt || '')
+                                : buildManualScreenshotPrompt(manualPrompt || '');
+                            console.log(`📝 Sending prompt (${manualModeTag}):`, builtPrompt);
+                            const promptResult = await sendTextMessage(builtPrompt);
                             if (!promptResult?.success) {
                                 throw new Error(promptResult?.error || 'Failed to send screenshot prompt');
                             }
@@ -775,8 +810,32 @@ async function captureManualScreenshot(imageQuality = null, manualPrompt = '') {
 }
 
 async function captureLeetScreenshot() {
-    console.log('LeetCode screenshot triggered');
+    console.log('🎯 LeetCode screenshot triggered');
     emitAppEvent('manual-screenshot-status', { state: 'pending', mode: 'leet' });
+
+    // Force a fresh frame: wait for stream to refresh and capture new frame
+    await new Promise(r => setTimeout(r, 800));
+    
+    // Force video track restart to guarantee fresh frame
+    if (mediaStream && mediaStream.getVideoTracks().length > 0) {
+        const videoTrack = mediaStream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        console.log('📹 Forcing fresh frame capture, current track settings:', settings);
+        // Request a new keyframe to flush any stale buffers
+        if ('applyConstraints' in videoTrack) {
+            try {
+                await videoTrack.applyConstraints({
+                    width: settings.width,
+                    height: settings.height,
+                    frameRate: SCREEN_CAPTURE_FRAMERATE
+                });
+                console.log('🔄 Video track constraints refreshed');
+            } catch (e) {
+                console.warn('Could not refresh video constraints:', e);
+            }
+        }
+    }
+
     const autoPrompt = 'LeetCode screenshot autoprompt - solve directly from the captured problem, no extra context available.';
     await captureScreenshot('high', true, autoPrompt, { forceFullResolution: true, manualModeTag: 'leet' });
 }
