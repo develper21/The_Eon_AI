@@ -40,6 +40,12 @@ class AppHeaderControls extends LitElement {
             font-weight: 600;
         }
 
+        .control-button.hackerrank-button {
+            border-color: rgba(34, 211, 238, 0.85);
+            color: #22d3ee;
+            font-weight: 600;
+        }
+
         .control-button.fast-mode-active {
             border-color: var(--success-border, rgba(52, 211, 153, 0.4));
             color: var(--success-color, #34d399);
@@ -62,6 +68,7 @@ class AppHeaderControls extends LitElement {
         fastMode: { type: Boolean },
         onManualScreenshot: { type: Function },
         onLeetScreenshot: { type: Function },
+        onHackerrankScreenshot: { type: Function },
         onFastModeToggle: { type: Function },
         onForceReconnect: { type: Function },
         onRestartCapture: { type: Function },
@@ -74,6 +81,7 @@ class AppHeaderControls extends LitElement {
         this.fastMode = false;
         this.onManualScreenshot = () => {};
         this.onLeetScreenshot = () => {};
+        this.onHackerrankScreenshot = () => {};
         this.onFastModeToggle = () => {};
         this.onForceReconnect = () => {};
         this.onRestartCapture = () => {};
@@ -96,6 +104,9 @@ class AppHeaderControls extends LitElement {
                 </button>
                 <button class="control-button leet-button" @click=${this.onLeetScreenshot} title="Capture full LeetCode screenshot">
                     Leet
+                </button>
+                <button class="control-button hackerrank-button" @click=${this.onHackerrankScreenshot} title="Capture full HackerRank screenshot">
+                    HackerRank
                 </button>
                 <button class="control-button" @click=${this.onForceReconnect} title="Force session reconnect">
                     Force Reconnect
