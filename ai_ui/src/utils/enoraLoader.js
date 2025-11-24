@@ -30,6 +30,13 @@ class EnoraLoader {
     show(message = 'Processing your request', subtext = 'AI is thinking...') {
         // Don't show loader if response has already started
         if (this.responseStarted) {
+            console.log('🚫 Loader blocked - response already started');
+            return;
+        }
+        
+        // Don't show loader if it was recently hidden (within 1 second)
+        if (this._lastHideTime && (Date.now() - this._lastHideTime) < 1000) {
+            console.log('🚫 Loader blocked - recently hidden');
             return;
         }
         
@@ -50,6 +57,8 @@ class EnoraLoader {
             this.createLoadingElements(message, subtext);
             this.startStepAnimation();
         }
+        
+        console.log('✅ Loader shown:', message);
     }
 
     hide() {
@@ -57,6 +66,7 @@ class EnoraLoader {
         
         // Mark that response has started - prevent loader from showing again
         this.responseStarted = true;
+        this._lastHideTime = Date.now(); // Track when loader was hidden
         
         // Clear any existing hide timeout
         if (this.hideTimeout) {
@@ -70,6 +80,7 @@ class EnoraLoader {
             this.stopStepAnimation();
             this.removeLoadingElements();
             this.hideTimeout = null;
+            console.log('✅ Loader hidden');
         }, 200); // 200ms delay
     }
 
@@ -88,9 +99,16 @@ class EnoraLoader {
 
     // Reset for new question
     resetForNewQuestion() {
+        console.log('🔄 Resetting loader for new question');
         this.responseStarted = false;
+        this._lastHideTime = 0; // Reset hide time
         this._lastAnimatedWordCount = 0;
         this._lastRenderedResponse = '';
+        
+        // Force hide any existing loader
+        if (this.isLoading) {
+            this.hide();
+        }
     }
 
     createLoadingElements(message, subtext) {
