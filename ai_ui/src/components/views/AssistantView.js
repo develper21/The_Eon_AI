@@ -364,6 +364,7 @@ export class AssistantView extends LitElement {
         this.onSendText = () => {};
         this._lastAnimatedWordCount = 0;
         this._lastRenderedResponse = '';
+        this._updateTimeout = null;
         this.partialTranscript = '';
         this.inputStatus = { state: 'idle', isSpeaking: false };
         
@@ -692,45 +693,68 @@ export class AssistantView extends LitElement {
             const currentResponse = this.getCurrentResponse();
             console.log('Current response:', currentResponse);
             
-            // Only update if content actually changed to prevent flickering
-            if (this._lastRenderedResponse !== currentResponse) {
-                const renderedResponse = this.renderMarkdown(currentResponse);
-                console.log('Rendered response:', renderedResponse);
-                
-                // Use a more gentle update approach to prevent flickering
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = renderedResponse;
-                const newWords = tempDiv.querySelectorAll('[data-word]');
-                
-                // Clear and update only if we have new content
-                if (newWords.length > 0) {
-                    container.innerHTML = renderedResponse;
-                    const words = container.querySelectorAll('[data-word]');
-                    
-                    if (this.shouldAnimateResponse) {
-                        // Only animate new words
-                        for (let i = 0; i < this._lastAnimatedWordCount && i < words.length; i++) {
-                            words[i].classList.add('visible');
-                        }
-                        for (let i = this._lastAnimatedWordCount; i < words.length; i++) {
-                            words[i].classList.remove('visible');
-                            setTimeout(() => {
-                                words[i].classList.add('visible');
-                                if (i === words.length - 1) {
-                                    this.dispatchEvent(new CustomEvent('response-animation-complete', { bubbles: true, composed: true }));
-                                }
-                            }, (i - this._lastAnimatedWordCount) * 50); // Reduced delay for smoother animation
-                        }
-                        this._lastAnimatedWordCount = words.length;
-                    } else {
-                        words.forEach(word => word.classList.add('visible'));
-                        this._lastAnimatedWordCount = words.length;
-                    }
-                    this.highlightCodeBlocks();
-                }
-                
-                this._lastRenderedResponse = currentResponse;
+            // Debounce rapid updates to prevent flickering
+            if (this._updateTimeout) {
+                clearTimeout(this._updateTimeout);
             }
+            
+            this._updateTimeout = setTimeout(() => {
+                // Only update if content actually changed
+                if (this._lastRenderedResponse !== currentResponse) {
+                    const renderedResponse = this.renderMarkdown(currentResponse);
+                    console.log('Rendered response:', renderedResponse);
+                    
+                    // Use append-only approach to prevent flickering
+                    if (this.shouldAnimateResponse && this._lastRenderedResponse) {
+                        // For streaming responses, append only new content
+                        const newContent = currentResponse.substring(this._lastRenderedResponse.length);
+                        if (newContent.trim()) {
+                            // Render just the new part and append
+                            const newRendered = this.renderMarkdown(newContent);
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = newRendered;
+                            
+                            // Append new content to existing container
+                            const newElements = Array.from(tempDiv.childNodes);
+                            newElements.forEach(el => {
+                                if (el.nodeType === Node.TEXT_NODE && el.textContent.trim()) {
+                                    // Wrap text nodes in spans for animation
+                                    const span = document.createElement('span');
+                                    span.setAttribute('data-word', '');
+                                    span.textContent = el.textContent;
+                                    span.style.opacity = '0';
+                                    container.appendChild(span);
+                                    
+                                    // Animate in
+                                    setTimeout(() => {
+                                        span.style.transition = 'opacity 0.3s ease-in';
+                                        span.style.opacity = '1';
+                                    }, 10);
+                                } else if (el.nodeType === Node.ELEMENT_NODE) {
+                                    container.appendChild(el.cloneNode(true));
+                                }
+                            });
+                        }
+                    } else {
+                        // Full update for initial load or when animation is disabled
+                        container.innerHTML = renderedResponse;
+                        const words = container.querySelectorAll('[data-word]');
+                        
+                        if (this.shouldAnimateResponse) {
+                            // Show all words immediately for streaming
+                            words.forEach(word => word.classList.add('visible'));
+                            this._lastAnimatedWordCount = words.length;
+                        } else {
+                            words.forEach(word => word.classList.add('visible'));
+                            this._lastAnimatedWordCount = words.length;
+                        }
+                        
+                        this.highlightCodeBlocks();
+                    }
+                    
+                    this._lastRenderedResponse = currentResponse;
+                }
+            }, 50); // 50ms debounce
         } else {
             console.log('Response container not found');
         }
