@@ -9,6 +9,7 @@ class EnoraLoader {
         this.stepIndex = 0;
         this.stepInterval = null;
         this.hideTimeout = null;
+        this.responseStarted = false; // Track if response has started
     }
 
     init() {
@@ -27,6 +28,11 @@ class EnoraLoader {
     }
 
     show(message = 'Processing your request', subtext = 'AI is thinking...') {
+        // Don't show loader if response has already started
+        if (this.responseStarted) {
+            return;
+        }
+        
         this.isLoading = true;
         this._showTime = Date.now(); // Track when loader was shown
         
@@ -48,6 +54,9 @@ class EnoraLoader {
 
     hide() {
         if (!this.isLoading) return;
+        
+        // Mark that response has started - prevent loader from showing again
+        this.responseStarted = true;
         
         // Clear any existing hide timeout
         if (this.hideTimeout) {
@@ -75,6 +84,13 @@ class EnoraLoader {
         if (subtext && subtextElement) {
             subtextElement.textContent = subtext;
         }
+    }
+
+    // Reset for new question
+    resetForNewQuestion() {
+        this.responseStarted = false;
+        this._lastAnimatedWordCount = 0;
+        this._lastRenderedResponse = '';
     }
 
     createLoadingElements(message, subtext) {
