@@ -135,6 +135,25 @@ export class HistoryView extends LitElement {
             background: var(--hover-background);
         }
 
+        .download-button {
+            background: var(--button-background);
+            color: var(--text-color);
+            border: 1px solid var(--focus-border-color);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .download-button:hover {
+            background: var(--hover-background);
+        }
+
         .legend {
             display: flex;
             gap: 12px;
@@ -411,6 +430,27 @@ export class HistoryView extends LitElement {
         };
     }
 
+    async downloadCurrentSessionPdf() {
+        if (!this.selectedSession) {
+            return;
+        }
+
+        if (!window.require) {
+            console.error('Electron IPC not available for PDF generation');
+            return;
+        }
+
+        try {
+            const { ipcRenderer } = window.require('electron');
+            const result = await ipcRenderer.invoke('generate-interview-pdf', this.selectedSession);
+            if (!result || !result.success) {
+                console.error('Failed to generate interview PDF:', result && result.error);
+            }
+        } catch (error) {
+            console.error('Error generating interview PDF:', error);
+        }
+    }
+
     renderSessionsList() {
         if (this.loading) {
             return html`<div class="loading">Loading conversation history...</div>`;
@@ -542,6 +582,32 @@ export class HistoryView extends LitElement {
                         <div class="legend-dot ai"></div>
                         <span>Suggestion</span>
                     </div>
+                    <button class="download-button" @click=${() => this.downloadCurrentSessionPdf()}>
+                        <svg
+                            width="16px"
+                            height="16px"
+                            stroke-width="1.7"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            color="currentColor"
+                        >
+                            <path
+                                d="M12 3v12.5M12 15.5l-4-4M12 15.5l4-4"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            ></path>
+                            <path
+                                d="M5 18.5h14"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                            ></path>
+                        </svg>
+                        <span>Download PDF</span>
+                    </button>
                 </div>
             </div>
             <div class="conversation-view">

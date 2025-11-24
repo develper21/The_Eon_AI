@@ -180,6 +180,7 @@ export class EnoraTheEonApp extends LitElement {
         layoutMode: { type: String },
         advancedMode: { type: Boolean },
         fastMode: { type: Boolean },
+        downloadState: { type: String },
         _viewInstances: { type: Object, state: true },
         _isClickThrough: { state: true },
         _awaitingNewResponse: { state: true },
@@ -205,6 +206,7 @@ export class EnoraTheEonApp extends LitElement {
         this.fastMode = localStorage.getItem('fastMode') === 'true';
         this.responses = [];
         this.currentResponseIndex = -1;
+        this.downloadState = 'idle';
         this._viewInstances = new Map();
         this._isClickThrough = false;
         this._awaitingNewResponse = false;
@@ -248,6 +250,16 @@ export class EnoraTheEonApp extends LitElement {
             });
             ipcRenderer.on('update-status', (_, status) => {
                 this.setStatus(status);
+            });
+            
+            // Listen for PDF logs from main process
+            ipcRenderer.on('pdf-log', (_, logData) => {
+                const { message, type } = logData;
+                if (type === 'error') {
+                    console.error(message);
+                } else {
+                    console.log(message);
+                }
             });
             ipcRenderer.on('click-through-toggled', (_, isEnabled) => {
                 this._isClickThrough = isEnabled;
@@ -315,7 +327,8 @@ export class EnoraTheEonApp extends LitElement {
         this._leetScreenshotHandler = async () => {
             try {
                 if (typeof window.captureLeetScreenshot === 'function') {
-                    await window.captureLeetScreenshot();
+                    const leetContext = (this.latestDraftMessage || '').trim();
+                    await window.captureLeetScreenshot(leetContext);
                 } else {
                     throw new Error('Leet screenshot module not loaded');
                 }
@@ -325,8 +338,23 @@ export class EnoraTheEonApp extends LitElement {
             }
         };
 
+        this._hackerrankScreenshotHandler = async () => {
+            try {
+                if (typeof window.captureHackerrankScreenshot === 'function') {
+                    const hackerrankContext = (this.latestDraftMessage || '').trim();
+                    await window.captureHackerrankScreenshot(hackerrankContext);
+                } else {
+                    throw new Error('HackerRank screenshot module not loaded');
+                }
+            } catch (error) {
+                console.error('HackerRank screenshot failed:', error);
+                this.setStatus('HackerRank screenshot failed: ' + (error?.message || 'unknown error'));
+            }
+        };
+
         this.handleManualScreenshotWithText = this._manualScreenshotHandler;
         this.handleLeetScreenshot = this._leetScreenshotHandler;
+        this.handleHackerrankScreenshot = this._hackerrankScreenshotHandler;
 
         this._connectionMetricsListener = event => {
             this.connectionHealth = event.detail || null;
@@ -810,6 +838,11 @@ export class EnoraTheEonApp extends LitElement {
         this.requestUpdate();
     }
 
+    handleTextDraftChanged(draftText) {
+        this.latestDraftMessage = draftText;
+        console.log('📝 DEBUG: Draft text updated:', JSON.stringify(draftText));
+    }
+
     async handleForceReconnect() {
         if (window.require) {
             try {
@@ -820,6 +853,110 @@ export class EnoraTheEonApp extends LitElement {
                 console.error('Force reconnect failed:', error);
                 this.setStatus('Failed to force reconnect');
             }
+        }
+    }
+
+    async handleDownloadInterviewPdf() {
+        console.log('[APP] handleDownloadInterviewPdf called');
+        try {
+            await this.generateRunInterviewPdf();
+            console.log('[APP] handleDownloadInterviewPdf completed');
+        } catch (error) {
+            console.error('[APP] Download handler error:', error);
+            this.setStatus('PDF download failed');
+        }
+    }
+
+    async generateRunInterviewPdf() {
+        try {
+            console.log('[APP] generateRunInterviewPdf started');
+            
+            if (!window.cheddar || !window.cheddar.getAllConversationSessions) {
+                console.log('[APP] Session data not available - cheddar object:', !!window.cheddar, 'getAllConversationSessions:', !!(window.cheddar && window.cheddar.getAllConversationSessions));
+                this.setStatus('Session data not available');
+                return;
+            }
+
+            console.log('[APP] Getting all conversation sessions...');
+            const allSessions = await window.cheddar.getAllConversationSessions();
+            console.log('[APP] Sessions retrieved:', allSessions ? allSessions.length : 'null');
+            
+            if (!Array.isArray(allSessions) || allSessions.length === 0) {
+                console.log('[APP] No interview sessions found');
+                this.setStatus('No interview sessions found');
+                return;
+            }
+
+            const runStart = this.startTime || 0;
+            let runSessions = allSessions.filter(
+                session => typeof session.timestamp === 'number' && session.timestamp >= runStart
+            );
+
+            console.log('[APP] Run start time:', this.startTime, 'filtered sessions:', runSessions.length);
+            
+            if (runSessions.length === 0) {
+                // Fallback: use the latest session only
+                console.log('[APP] Using fallback to latest session');
+                const latest = allSessions.slice().sort((a, b) => b.timestamp - a.timestamp)[0];
+                runSessions = latest ? [latest] : [];
+            }
+
+            if (runSessions.length === 0) {
+                console.log('[APP] No sessions available for PDF');
+                this.setStatus('No sessions available for PDF');
+                return;
+            }
+
+            runSessions.sort((a, b) => a.timestamp - b.timestamp);
+            console.log('[APP] Using sessions:', runSessions.map(s => ({ id: s.sessionId, ts: s.timestamp, turns: s.conversationHistory ? s.conversationHistory.length : 0 })));
+
+            const combinedHistory = [];
+            runSessions.forEach(session => {
+                if (Array.isArray(session.conversationHistory)) {
+                    combinedHistory.push(...session.conversationHistory);
+                }
+            });
+
+            console.log('[APP] Combined history length:', combinedHistory.length);
+
+            if (combinedHistory.length === 0) {
+                console.log('[APP] No interview data to export');
+                this.setStatus('No interview data to export');
+                return;
+            }
+
+            const syntheticSession = {
+                sessionId: runSessions[0].sessionId,
+                timestamp: runSessions[0].timestamp,
+                conversationHistory: combinedHistory,
+            };
+
+            console.log('[APP] Synthetic session created, calling IPC...');
+
+            if (window.require) {
+                const { ipcRenderer } = window.require('electron');
+                console.log('[APP] ipcRenderer available, invoking generate-interview-pdf');
+                const result = await ipcRenderer.invoke('generate-interview-pdf', syntheticSession);
+                console.log('[APP] IPC result:', result);
+                
+                if (result && result.success) {
+                    console.log('[APP] PDF generation successful');
+                    this.setStatus('Interview PDF saved to Downloads');
+                } else if (result && !result.success) {
+                    console.error('[APP] Failed to generate interview PDF:', result.error);
+                    this.setStatus('Failed to generate interview PDF: ' + (result.error || 'Unknown error'));
+                } else {
+                    console.error('[APP] IPC returned invalid result:', result);
+                    this.setStatus('PDF generation returned invalid result');
+                }
+            } else {
+                console.error('[APP] window.require not available');
+                this.setStatus('Electron IPC not available');
+            }
+        } catch (error) {
+            console.error('[APP] Interview PDF generation failed:', error);
+            console.error('[APP] Error stack:', error.stack);
+            this.setStatus('PDF generation error: ' + error.message);
         }
     }
 
@@ -997,13 +1134,16 @@ export class EnoraTheEonApp extends LitElement {
                               <div class="assistant-controls-wrapper">
                                   <app-header-controls
                                       .fastMode=${this.fastMode}
+                                      .downloadState=${this.downloadState}
                                       .onManualScreenshot=${() => this._manualScreenshotHandler()}
                                       .onLeetScreenshot=${() => this._leetScreenshotHandler()}
+                                      .onHackerrankScreenshot=${() => this._hackerrankScreenshotHandler()}
                                       .onFastModeToggle=${() => this.handleFastModeChange(!this.fastMode)}
                                       .onForceReconnect=${() => this.handleForceReconnect()}
                                       .onRestartCapture=${() => this.handleRestartCapture()}
                                       .onFullReset=${() => this.handleFullReset()}
                                       .onHideToggleClick=${() => this.handleHideToggle()}
+                                      .onDownloadInterviewPdf=${() => this.handleDownloadInterviewPdf()}
                                   ></app-header-controls>
                               </div>
                           `
