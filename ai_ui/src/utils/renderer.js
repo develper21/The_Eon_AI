@@ -1273,6 +1273,18 @@ ipcRenderer.on('show-loader', (event, message, subtext) => {
 
 ipcRenderer.on('hide-loader', (event) => {
     EnoraLoader.hide();
+    
+    // Ensure UI remains responsive by resetting any stuck states
+    setTimeout(() => {
+        // Force hide loader if it's still visible
+        if (window.EnoraLoader && window.EnoraLoader.getInstance().isLoading) {
+            window.EnoraLoader.hide();
+        }
+        
+        // Reset any potential UI blocking
+        document.body.style.pointerEvents = '';
+        document.body.style.userSelect = '';
+    }, 100);
 });
 
 // Expose functions to global scope for external access
