@@ -28,6 +28,7 @@ class EnoraLoader {
 
     show(message = 'Processing your request', subtext = 'AI is thinking...') {
         this.isLoading = true;
+        this._showTime = Date.now(); // Track when loader was shown
         
         // Clear any existing hide timeout
         if (this.hideTimeout) {
@@ -77,13 +78,17 @@ class EnoraLoader {
     }
 
     createLoadingElements(message, subtext) {
-        // Create overlay
+        // Create overlay - but make it non-blocking
         this.overlayElement = document.createElement('div');
         this.overlayElement.className = 'enora-loading-overlay';
+        this.overlayElement.style.pointerEvents = 'none'; // Important: Don't block interactions!
+        this.overlayElement.style.userSelect = 'none';
         
         // Create loading container
         this.loadingElement = document.createElement('div');
         this.loadingElement.className = `enora-loading-container ${this.currentStep}`;
+        this.loadingElement.style.pointerEvents = 'none'; // Important: Don't block interactions!
+        this.loadingElement.style.userSelect = 'none';
         
         this.loadingElement.innerHTML = `
             <div class="enora-logo-container">
