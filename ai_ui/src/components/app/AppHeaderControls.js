@@ -62,6 +62,62 @@ class AppHeaderControls extends LitElement {
             font-size: 12px;
             margin: 0px;
         }
+
+        .download-circle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-color: rgba(16, 185, 129, 0.9);
+            color: #22c55e;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-circle.loading {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .download-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .download-icon.hide {
+            opacity: 0;
+            transform: translateY(8px);
+            position: absolute;
+        }
+
+        .success-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0;
+            transform: translateY(-8px);
+            position: absolute;
+        }
+
+        .success-icon.show {
+            opacity: 1;
+            transform: translateY(0);
+            position: relative;
+        }
     `;
 
     static properties = {
@@ -74,6 +130,8 @@ class AppHeaderControls extends LitElement {
         onRestartCapture: { type: Function },
         onFullReset: { type: Function },
         onHideToggleClick: { type: Function },
+        onDownloadInterviewPdf: { type: Function },
+        downloadState: { type: String }, // 'idle', 'loading', 'success'
     };
 
     constructor() {
@@ -87,6 +145,38 @@ class AppHeaderControls extends LitElement {
         this.onRestartCapture = () => {};
         this.onFullReset = () => {};
         this.onHideToggleClick = () => {};
+        this.onDownloadInterviewPdf = () => {};
+        this.downloadState = 'idle';
+    }
+
+    async handleDownloadClick() {
+        console.log('[BUTTON] Download clicked, current state:', this.downloadState);
+        if (this.downloadState === 'loading') {
+            console.log('[BUTTON] Already loading, ignoring click');
+            return;
+        }
+        
+        this.downloadState = 'loading';
+        console.log('[BUTTON] State set to loading');
+        this.requestUpdate();
+        
+        try {
+            console.log('[BUTTON] Calling onDownloadInterviewPdf...');
+            await this.onDownloadInterviewPdf();
+            console.log('[BUTTON] Download completed successfully');
+            this.downloadState = 'success';
+            this.requestUpdate();
+            
+            setTimeout(() => {
+                console.log('[BUTTON] Resetting to idle after 2 seconds');
+                this.downloadState = 'idle';
+                this.requestUpdate();
+            }, 2000);
+        } catch (error) {
+            console.error('[BUTTON] Download error:', error);
+            this.downloadState = 'idle';
+            this.requestUpdate();
+        }
     }
 
     render() {
@@ -116,6 +206,57 @@ class AppHeaderControls extends LitElement {
                 </button>
                 <button class="control-button" @click=${this.onFullReset} title="Restart capture and listening pipelines">
                     Reset Stream
+                </button>
+                <button
+                    class="control-button download-circle ${this.downloadState === 'loading' ? 'loading' : ''}"
+                    @click=${() => this.handleDownloadClick()}
+                    title="Download interview PDF"
+                    ?disabled=${this.downloadState === 'loading'}
+                >
+                    <div class="download-icon ${this.downloadState === 'success' ? 'hide' : ''}">
+                        <svg
+                            width="18px"
+                            height="18px"
+                            stroke-width="1.7"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            color="currentColor"
+                        >
+                            <path
+                                d="M12 3v11.5M12 14.5l-3.5-3.5M12 14.5l3.5-3.5"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            ></path>
+                            <path
+                                d="M5 18.5h14"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div class="success-icon ${this.downloadState === 'success' ? 'show' : ''}">
+                        <svg
+                            width="18px"
+                            height="18px"
+                            stroke-width="1.7"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            color="currentColor"
+                        >
+                            <path
+                                d="M20 6L9 17L4 12"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            ></path>
+                        </svg>
+                    </div>
                 </button>
                 <button class="control-button" @click=${this.onHideToggleClick}>
                     Hide&nbsp;&nbsp;<span class="key" style="pointer-events: none;">${cheddar.isMacOS ? 'Cmd' : 'Ctrl'}</span
