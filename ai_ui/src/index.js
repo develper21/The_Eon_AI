@@ -213,6 +213,19 @@ function setupGeneralIpcHandlers() {
         }
     });
 
+    // Handle loader events from Gemini
+    ipcMain.on('show-loader', (event, message, subtext) => {
+        if (mainWindow) {
+            mainWindow.webContents.send('show-loader', message, subtext);
+        }
+    });
+
+    ipcMain.on('hide-loader', (event) => {
+        if (mainWindow) {
+            mainWindow.webContents.send('hide-loader');
+        }
+    });
+
     ipcMain.handle('update-content-protection', async (event, contentProtection) => {
         try {
             if (mainWindow) {
