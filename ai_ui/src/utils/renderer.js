@@ -604,10 +604,16 @@ function setupLinuxMicProcessing(micStream) {
                 const pcmData16 = convertFloat32ToInt16(chunk);
                 const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-                await ipcRenderer.invoke('send-mic-audio-content', {
+                // Show loader for microphone audio processing
+                EnoraLoader.show('Processing microphone audio', 'AI is listening to your voice...');
+                
+                const result = await ipcRenderer.invoke('send-mic-audio-content', {
                     data: base64Data,
                     mimeType: 'audio/pcm;rate=24000',
                 });
+                
+                // Hide loader after sending
+                EnoraLoader.hide();
                 emitAppEvent('audio-activity', { source: 'mic', success: true });
             }
         }
@@ -679,10 +685,16 @@ function setupWindowsLoopbackProcessing() {
             const pcmData16 = convertFloat32ToInt16(chunk);
             const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-audio-content', {
+            // Show loader for audio processing
+            EnoraLoader.show('Processing audio', 'AI is listening...');
+            
+            const result = await ipcRenderer.invoke('send-audio-content', {
                 data: base64Data,
                 mimeType: 'audio/pcm;rate=24000',
             });
+            
+            // Hide loader after sending
+            EnoraLoader.hide();
         }
     };
 
@@ -830,9 +842,15 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
                 }
 
                 try {
+                    // Show loader for image processing
+                    EnoraLoader.show('Processing image', 'AI is analyzing the visual content...');
+                    
                     const result = await ipcRenderer.invoke('send-image-content', {
                         data: base64data,
                     });
+                    
+                    // Hide loader after sending
+                    EnoraLoader.hide();
 
                     if (result.success) {
                         // Track image tokens after successful send
@@ -1585,10 +1603,16 @@ async function processManualImageBase64(base64data, manualPrompt, manualModeTag,
     }
 
     try {
+        // Show loader for manual image processing
+        EnoraLoader.show('Processing screenshot', 'AI is analyzing the captured content...');
+        
         const dimensions = await getImageDimensionsFromBase64(base64data);
         const result = await ipcRenderer.invoke('send-image-content', {
             data: base64data,
         });
+        
+        // Hide loader after sending
+        EnoraLoader.hide();
 
         if (!result.success) {
             emitManualStatus?.('error', { message: result.error || 'Failed to send image' });
