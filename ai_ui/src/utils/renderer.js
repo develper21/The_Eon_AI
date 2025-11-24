@@ -120,6 +120,62 @@ async function prepareCaptureSurfaces(forceFullResolution = false) {
 // renderer.js - Enhanced Enora The Eon Input System
 const { ipcRenderer } = require('electron');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+
+let createTesseractWorker = null;
+try {
+    const tesseractModule = require('tesseract.js/dist/tesseract.min.js');
+    ({ createWorker: createTesseractWorker } = tesseractModule);
+} catch (ocrError) {
+    console.warn('Tesseract OCR module not available. Leet autodetection disabled.', ocrError);
+    createTesseractWorker = null;
+}
+
+const toFileUrl = relativePath => pathToFileURL(path.join(__dirname, relativePath)).href;
+
+const TESSERACT_PATHS = {
+    workerPath: toFileUrl('..\\node_modules\\tesseract.js\\dist\\worker.min.js'),
+    corePath: toFileUrl('..\\node_modules\\tesseract.js-core\\tesseract-core.wasm.js'),
+    langPath: toFileUrl('..\\node_modules\\tesseract.js\\dist'),
+};
+
+let ocrWorkerPromise = null;
+
+async function getOcrWorker() {
+    if (!createTesseractWorker) {
+        console.warn('Tesseract createWorker not available');
+        return null;
+    }
+
+    if (!ocrWorkerPromise) {
+        ocrWorkerPromise = (async () => {
+            try {
+                console.log('🔧 Initializing OCR worker with paths:', TESSERACT_PATHS);
+                const worker = await createTesseractWorker({
+                    workerPath: TESSERACT_PATHS.workerPath,
+                    corePath: TESSERACT_PATHS.corePath,
+                    langPath: TESSERACT_PATHS.langPath,
+                    logger: (msg) => console.log('📊 Tesseract:', msg),
+                });
+
+                console.log('✅ Worker created, loading...');
+                await worker.load();
+                console.log('✅ Worker loaded, loading language...');
+                await worker.loadLanguage('eng');
+                console.log('✅ Language loaded, initializing...');
+                await worker.initialize('eng');
+                console.log('✅ OCR worker ready');
+                return worker;
+            } catch (error) {
+                console.error('❌ Failed to initialize OCR worker:', error.message, error);
+                ocrWorkerPromise = null;
+                return null;
+            }
+        })();
+    }
+
+    return ocrWorkerPromise;
+}
 
 let buildLeetScreenshotPrompt;
 try {
@@ -652,6 +708,18 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
     };
     console.log(`Capturing ${isManual ? 'manual' : 'automated'} screenshot...`);
     if (!mediaStream) {
+        if (isManual && manualModeTag === 'leet') {
+            const fileBase64 = await promptLeetImageFileSelection();
+            if (!fileBase64) {
+                emitManualStatus('error', {
+                    message: 'No image selected. Please choose a LeetCode screenshot.',
+                });
+                return;
+            }
+            await processManualImageBase64(fileBase64, manualPrompt, manualModeTag, emitManualStatus);
+            return;
+        }
+
         emitManualStatus('error', {
             message: 'Screen share is not active. Start capture first.',
         });
@@ -772,14 +840,7 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
                         tokenTracker.addTokens(imageTokens, 'image');
                         console.log(`📊 Image sent successfully - ${imageTokens} tokens used (${offscreenCanvas.width}x${offscreenCanvas.height})`);
                         if (isManual) {
-                            const builtPrompt = manualModeTag === 'leet'
-                                ? buildLeetScreenshotPrompt(manualPrompt || '')
-                                : buildManualScreenshotPrompt(manualPrompt || '');
-                            console.log(`📝 Sending prompt (${manualModeTag}):`, builtPrompt);
-                            const promptResult = await sendTextMessage(builtPrompt);
-                            if (!promptResult?.success) {
-                                throw new Error(promptResult?.error || 'Failed to send screenshot prompt');
-                            }
+                            await handleManualPromptFromImage(base64data, manualPrompt, manualModeTag);
                             emitManualStatus('sent');
                         }
                     } else {
@@ -805,44 +866,402 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false, manu
 async function captureManualScreenshot(imageQuality = null, manualPrompt = '') {
     console.log('Manual screenshot triggered');
     emitAppEvent('manual-screenshot-status', { state: 'pending', mode: 'manual' });
-    const quality = imageQuality || currentImageQuality;
-    await captureScreenshot(quality, true, manualPrompt, { manualModeTag: 'manual' });
-}
-
-async function captureLeetScreenshot() {
-    console.log('🎯 LeetCode screenshot triggered');
-    emitAppEvent('manual-screenshot-status', { state: 'pending', mode: 'leet' });
-
-    // Force a fresh frame: wait for stream to refresh and capture new frame
-    await new Promise(r => setTimeout(r, 800));
     
-    // Force video track restart to guarantee fresh frame
-    if (mediaStream && mediaStream.getVideoTracks().length > 0) {
-        const videoTrack = mediaStream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        console.log('📹 Forcing fresh frame capture, current track settings:', settings);
-        // Request a new keyframe to flush any stale buffers
-        if ('applyConstraints' in videoTrack) {
-            try {
-                await videoTrack.applyConstraints({
-                    width: settings.width,
-                    height: settings.height,
-                    frameRate: SCREEN_CAPTURE_FRAMERATE
-                });
-                console.log('🔄 Video track constraints refreshed');
-            } catch (e) {
-                console.warn('Could not refresh video constraints:', e);
+    // Check if this looks like a LeetCode problem based on the prompt
+    const isLeetCode = isLikelyLeetCodeContext(manualPrompt);
+    
+    let finalPrompt = manualPrompt;
+    if (isLeetCode && manualPrompt) {
+        // Extract problem number from the manual prompt
+        const match = manualPrompt.match(/\d+/);
+        const problemNum = match ? match[0] : '';
+        
+        if (problemNum) {
+            // Use the same hardcoded prompts as the Leet button
+            const problemPrompts = {
+                '1': `Solve LeetCode Problem 1: Two Sum.
+Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`,
+                
+                '2': `Solve LeetCode Problem 2: Add Two Numbers.
+You are given two non-empty linked lists representing two non-negative integers. The digits are stored in reverse order, and each of their nodes contains a single digit. Add the two numbers and return the sum as a linked list.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`,
+                
+                '3': `Solve LeetCode Problem 3: Longest Substring Without Repeating Characters.
+Given a string s, find the length of the longest substring without repeating characters.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`,
+                
+                '4': `Solve LeetCode Problem 4: Median of Two Sorted Arrays.
+Given two sorted arrays nums1 and nums2 of size m and n respectively, return the median of the two sorted arrays.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`,
+                
+                '5': `Solve LeetCode Problem 5: Longest Palindromic Substring.
+Given a string s, return the longest palindromic substring in s.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`,
+                
+                '28': `Solve LeetCode Problem 28: Find the Index of the First Occurrence in a String.
+Given two strings haystack and needle, return the index of the first occurrence of needle in haystack, or -1 if needle is not part of haystack.
+Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`
+            };
+            
+            finalPrompt = problemPrompts[problemNum] || `Solve LeetCode Problem ${problemNum}. Provide complete solution with Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, and Edge Cases.`;
+            
+            // Send directly without screenshot
+            const result = await sendTextMessage(finalPrompt);
+            if (!result?.success) {
+                console.error('Failed to send LeetCode prompt:', result?.error);
             }
+            return;
         }
     }
+    
+    // Regular screenshot for non-LeetCode content
+    const quality = imageQuality || currentImageQuality;
+    await captureScreenshot(quality, true, finalPrompt, { manualModeTag: 'manual' });
+}
 
-    const autoPrompt = 'LeetCode screenshot autoprompt - solve directly from the captured problem, no extra context available.';
-    await captureScreenshot('high', true, autoPrompt, { forceFullResolution: true, manualModeTag: 'leet' });
+async function captureLeetScreenshot(questionContext = '') {
+    console.log('🎯 LeetCode screenshot triggered');
+    console.log('📝 DEBUG: Received questionContext:', JSON.stringify(questionContext));
+    
+    // Use the questionContext (from draft field) as problem number
+    const problemNumber = questionContext || '';
+    
+    if (!problemNumber) {
+        console.log('⚠️ No problem number provided. Please type the problem number in the draft field before clicking Leet.');
+        emitAppEvent('manual-screenshot-status', {
+            state: 'error',
+            mode: 'leet',
+            message: 'Please type the problem number (e.g., 2, 5, 28) in the text field before clicking Leet.',
+        });
+        return;
+    }
+    
+    // Extract just the number from input (in case they type "Problem 2" or just "2")
+    const match = problemNumber.match(/\d+/);
+    const problemNum = match ? match[0] : problemNumber;
+    
+    console.log('📝 Using problem number:', problemNum);
+    
+    // Direct hardcoded prompts for each problem
+    const problemPrompts = {
+        '1': `Solve LeetCode Problem 1: Two Sum.
+Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '2': `Solve LeetCode Problem 2: Add Two Numbers.
+You are given two non-empty linked lists representing two non-negative integers. The digits are stored in reverse order, and each of their nodes contains a single digit. Add the two numbers and return the sum as a linked list.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '3': `Solve LeetCode Problem 3: Longest Substring Without Repeating Characters.
+Given a string s, find the length of the longest substring without repeating characters.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '4': `Solve LeetCode Problem 4: Median of Two Sorted Arrays.
+Given two sorted arrays nums1 and nums2 of size m and n respectively, return the median of the two sorted arrays.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '5': `Solve LeetCode Problem 5: Longest Palindromic Substring.
+Given a string s, return the longest palindromic substring in s.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '28': `Solve LeetCode Problem 28: Find the Index of the First Occurrence in a String.
+Given two strings haystack and needle, return the index of the first occurrence of needle in haystack, or -1 if needle is not part of haystack.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**C++17 Code:** (complete runnable code with line-by-line comments)
+**Dry Run:** (step-by-step execution with comments)
+**Edge Cases:`
+    };
+    
+    const finalPrompt = problemPrompts[problemNum] || `Solve LeetCode Problem ${problemNum}.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`;
+    
+    console.log(' Sending prompt for problem', problemNum);
+    const result = await sendTextMessage(finalPrompt);
+    
+    if (!result?.success) {
+        console.error('Failed to send prompt:', result?.error);
+        emitAppEvent('manual-screenshot-status', {
+            state: 'error',
+            mode: 'leet',
+            message: 'Failed to send prompt: ' + (result?.error || 'unknown error'),
+        });
+    } else {
+        emitAppEvent('manual-screenshot-status', {
+            state: 'success',
+            mode: 'leet',
+            message: `Successfully sent prompt for Problem ${problemNum}`,
+        });
+    }
+}
+
+async function captureHackerrankScreenshot(questionContext = '') {
+    console.log(' HackerRank screenshot triggered');
+    console.log(' DEBUG: Received questionContext:', JSON.stringify(questionContext));
+    
+    // Use the questionContext (from draft field) as problem identifier
+    const problemIdentifier = questionContext || '';
+    
+    if (!problemIdentifier) {
+        console.log(' No problem identifier provided. Please type the problem name or number in the draft field before clicking HackerRank.');
+        emitAppEvent('manual-screenshot-status', {
+            state: 'error',
+            mode: 'hackerrank',
+            message: 'Please type the problem name or number (e.g., "Array Manipulation", "30") in the text field before clicking HackerRank.',
+        });
+        return;
+    }
+    
+    console.log(' Using problem identifier:', problemIdentifier);
+    
+    // HackerRank problem prompts
+    const hackerrankPrompts = {
+        'Array Manipulation': `Solve HackerRank Problem: Array Manipulation.
+Starting with a n-sized array initialized with zeros, you are given m operations. Each operation consists of a range [a, b] and a value k to add to each element in the range.
+
+Requirements:
+- Provide solution with O(n + m) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        'Two Sum': `Solve HackerRank Problem: Two Sum.
+Given an array of integers and a target value, determine the number of pairs of array elements that have a sum equal to the target.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`,
+        
+        '30': `Solve HackerRank Problem ID 30.
+This appears to be a problem from HackerRank. Please provide the solution with optimal complexity.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`
+    };
+    
+    // Try to find exact match first
+    let finalPrompt = hackerrankPrompts[problemIdentifier];
+    
+    // If not found, try to match by partial name or number
+    if (!finalPrompt) {
+        const numMatch = problemIdentifier.match(/\d+/);
+        const problemNum = numMatch ? numMatch[0] : '';
+        
+        if (problemNum && hackerrankPrompts[problemNum]) {
+            finalPrompt = hackerrankPrompts[problemNum];
+        } else {
+            // Generic HackerRank prompt
+            finalPrompt = `Solve HackerRank Problem: ${problemIdentifier}.
+
+Requirements:
+- Provide solution with O(n) time and O(1) space complexity if possible
+- If not possible, provide the next best time and space complexity
+- Use ONLY "using namespace std;" (no other namespaces)
+- Provide complete runnable code with #include, int main, and all necessary libraries
+- Explain each method name and function purpose line by line
+- At the end, provide a dry run with line-by-line explanation via comments
+
+Format:
+**Problem Summary:** 
+**Constraints:** 
+**Technique:** 
+**Complexity:** 
+**Edge Cases:**
+
+**C++17 Code:** (complete runnable code with line-by-line comments)
+
+**Dry Run:** (step-by-step execution with comments)`;
+        }
+    }
+    
+    console.log(' Sending prompt for HackerRank problem:', problemIdentifier);
+    const result = await sendTextMessage(finalPrompt);
+    
+    if (!result?.success) {
+        console.error('Failed to send HackerRank prompt:', result?.error);
+        emitAppEvent('manual-screenshot-status', {
+            state: 'error',
+            mode: 'hackerrank',
+            message: 'Failed to send prompt: ' + (result?.error || 'unknown error'),
+        });
+    } else {
+        emitAppEvent('manual-screenshot-status', {
+            state: 'success',
+            mode: 'hackerrank',
+            message: `Successfully sent prompt for HackerRank problem: ${problemIdentifier}`,
+        });
+    }
 }
 
 // Expose functions to global scope for external access
 window.captureManualScreenshot = captureManualScreenshot;
 window.captureLeetScreenshot = captureLeetScreenshot;
+window.captureHackerrankScreenshot = captureHackerrankScreenshot;
 
 function stopCapture() {
     if (screenshotInterval) {
@@ -926,7 +1345,7 @@ function buildManualScreenshotPrompt(userPrompt = '') {
     const contextLine = trimmed
         ? `Screenshot context: ${trimmed}`
         : 'Screenshot context: Visual content only (no extra user text).';
-    return `${contextLine}\n\nRules:\n- Describe only what is visible and give the most helpful next action in ≤3 sentences.\n- **Do NOT** solve LeetCode/LC or coding-challenge problems from this button. If the capture looks like a coding challenge, politely remind the user to use the Leet button instead.\n- Otherwise, keep the response practical and concise.`;
+    return `${contextLine}\n\nRules:\n- Describe only what is visible and give the most helpful next action in ≤3 sentences.\n- If this is a LeetCode or coding challenge problem, provide a helpful solution with the same format as the Leet button (Problem Summary, Constraints, Technique, Complexity, C++17 Code, Dry Run, Edge Cases).\n- Otherwise, keep the response practical and concise.`;
 }
 
 function buildManualLeetRefusalPrompt(userPrompt = '') {
@@ -936,14 +1355,310 @@ function buildManualLeetRefusalPrompt(userPrompt = '') {
 
 async function sendManualScreenshotPrompt(manualPrompt = '') {
     const trimmed = (manualPrompt || '').trim();
-    const message = isLikelyLeetCodeContext(trimmed)
-        ? buildManualLeetRefusalPrompt(trimmed)
-        : buildManualScreenshotPrompt(trimmed);
+    // Always allow answering LeetCode questions from the regular screenshot button
+    const message = buildManualScreenshotPrompt(trimmed);
     return sendTextMessage(message);
 }
 
 async function sendLeetScreenshotPrompt(manualPrompt = '') {
     return sendTextMessage(buildLeetScreenshotPrompt(manualPrompt || ''));
+}
+
+function buildLeetContextPayload(ocrContext = '', manualPrompt = '') {
+    const segments = [];
+    if (ocrContext) {
+        segments.push(`Detected question: ${ocrContext}`);
+    }
+    if (manualPrompt) {
+        segments.push(manualPrompt);
+    }
+    return segments.join('\n');
+}
+
+async function extractLeetQuestionContext(base64data = '') {
+    const worker = await getOcrWorker();
+    if (!worker) {
+        console.warn('OCR worker unavailable, skipping extraction');
+        return { title: '', fullText: '' };
+    }
+
+    try {
+        console.log('🔍 Starting OCR on full screenshot...');
+        const fullBlob = base64ToBlob(base64data, 'image/jpeg');
+        if (!fullBlob) {
+            console.warn('Failed to convert base64 to blob');
+            return { title: '', fullText: '' };
+        }
+
+        const { data } = await worker.recognize(fullBlob, {
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 #:-().,\n',
+        });
+
+        const rawText = (data?.text || '').trim();
+        console.log('📄 OCR raw text (first 300 chars):', rawText.substring(0, 300));
+
+        if (!rawText) {
+            console.warn('⚠️ OCR returned empty text');
+            return { title: '', fullText: '' };
+        }
+
+        const title = extractProblemNumberAndTitle(rawText);
+        if (title) {
+            console.log('✅ Detected question title (OCR):', title);
+            console.log('📝 Full extracted text length:', rawText.length);
+            return { title, fullText: rawText };
+        }
+
+        console.warn('⚠️ OCR completed but no problem number/title found in text');
+        return { title: '', fullText: rawText };
+    } catch (error) {
+        console.error('❌ OCR extraction failed:', error.message);
+        return { title: '', fullText: '' };
+    }
+}
+
+function extractProblemNumberAndTitle(rawText) {
+    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    for (const line of lines) {
+        const match = line.match(/^(\d+)\s*[.:\-\)]\s*(.+?)(?:\s*\(|$)/);
+        if (match) {
+            const [, num, title] = match;
+            return `LC ${num} - ${title.trim()}`;
+        }
+    }
+    
+    return '';
+}
+
+function summarizeLeetQuestionFromText(text) {
+    const lines = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+    if (lines.length === 0) {
+        return '';
+    }
+
+    const strongKeywords = ['leetcode', 'problem', 'add', 'sum', 'array', 'tree', 'graph'];
+    const keywordLine = lines.find(line => strongKeywords.some(keyword => line.toLowerCase().includes(keyword)));
+    const byNumber = lines.find(line => /^\d+\s*[.:\-)]\s*/.test(line));
+    const candidate = keywordLine || byNumber || lines[0];
+
+    const match = candidate.match(/^(\d+)\s*[.:\-)]?\s*(.+)$/);
+    if (match) {
+        const [, number, title] = match;
+        return `LC ${number} - ${title.trim()}`;
+    }
+
+    return candidate;
+}
+
+function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+    if (!base64) {
+        return null;
+    }
+
+    const byteCharacters = atob(base64);
+    const sliceSize = 1024;
+    const byteArrays = [];
+
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i += 1) {
+            byteNumbers[i] = slice.charCodeAt(i);
+        }
+        byteArrays.push(new Uint8Array(byteNumbers));
+    }
+
+    return new Blob(byteArrays, { type: mimeType });
+}
+
+async function handleManualPromptFromImage(base64data, manualPrompt, manualModeTag) {
+    if (!manualModeTag) {
+        return;
+    }
+
+    let leetContext = { title: '', fullText: '' };
+    if (manualModeTag === 'leet') {
+        // Try OCR, but don't block if it fails
+        try {
+            leetContext = await extractLeetQuestionContext(base64data);
+            if (leetContext.fullText) {
+                console.log('📋 Extracted problem text from screenshot');
+                // Send the extracted text as a message so user can see it
+                await sendTextMessage(`**Extracted Problem Text:**\n\n${leetContext.fullText}`);
+            }
+        } catch (error) {
+            console.warn('OCR failed, will ask Gemini to read the screenshot instead:', error.message);
+            leetContext = { title: '', fullText: '' };
+        }
+    }
+
+    const promptContext = manualModeTag === 'leet'
+        ? buildLeetContextPayload(leetContext.title, manualPrompt)
+        : manualPrompt || '';
+
+    const builtPrompt = manualModeTag === 'leet'
+        ? buildLeetScreenshotPrompt(promptContext)
+        : buildManualScreenshotPrompt(promptContext);
+
+    console.log(`📝 Sending prompt (${manualModeTag}):`, builtPrompt);
+    const promptResult = await sendTextMessage(builtPrompt);
+    if (!promptResult?.success) {
+        throw new Error(promptResult?.error || 'Failed to send screenshot prompt');
+    }
+}
+
+let leetFileInput = null;
+
+function ensureLeetImageInput() {
+    if (leetFileInput) {
+        return leetFileInput;
+    }
+
+    leetFileInput = document.createElement('input');
+    leetFileInput.type = 'file';
+    leetFileInput.accept = 'image/png,image/jpeg';
+    leetFileInput.style.display = 'none';
+    document.body.appendChild(leetFileInput);
+    return leetFileInput;
+}
+
+async function promptLeetImageFileSelection() {
+    const input = ensureLeetImageInput();
+
+    return new Promise(resolve => {
+        const cleanup = () => {
+            input.value = '';
+            input.onchange = null;
+        };
+
+        input.onchange = () => {
+            const file = input.files && input.files[0];
+            if (!file) {
+                cleanup();
+                resolve(null);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result.split(',')[1];
+                cleanup();
+                resolve(base64);
+            };
+            reader.onerror = () => {
+                cleanup();
+                resolve(null);
+            };
+            reader.readAsDataURL(file);
+        };
+
+        input.click();
+    });
+}
+
+async function processManualImageBase64(base64data, manualPrompt, manualModeTag, emitManualStatus) {
+    if (!base64data) {
+        emitManualStatus?.('error', { message: 'No image data provided.' });
+        return;
+    }
+
+    try {
+        const dimensions = await getImageDimensionsFromBase64(base64data);
+        const result = await ipcRenderer.invoke('send-image-content', {
+            data: base64data,
+        });
+
+        if (!result.success) {
+            emitManualStatus?.('error', { message: result.error || 'Failed to send image' });
+            return;
+        }
+
+        if (dimensions) {
+            const { width, height } = dimensions;
+            const imageTokens = tokenTracker.calculateImageTokens(width, height);
+            tokenTracker.addTokens(imageTokens, 'image');
+            console.log(`📊 Image sent successfully - ${imageTokens} tokens used (${width}x${height})`);
+        }
+
+        await handleManualPromptFromImage(base64data, manualPrompt, manualModeTag);
+        emitManualStatus?.('sent');
+    } catch (error) {
+        console.error('Error processing manual image:', error);
+        emitManualStatus?.('error', { message: error.message });
+    }
+}
+
+async function getImageDimensionsFromBase64(base64data) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+        };
+        img.onerror = () => resolve(null);
+        img.src = `data:image/jpeg;base64,${base64data}`;
+    });
+}
+
+async function createQuestionCropBlob(base64data) {
+    const image = await loadImageFromBase64(base64data);
+    if (!image) {
+        return null;
+    }
+
+    const cropRect = computeQuestionCropRect(image.width, image.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = cropRect.width;
+    canvas.height = cropRect.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(
+        image,
+        cropRect.x,
+        cropRect.y,
+        cropRect.width,
+        cropRect.height,
+        0,
+        0,
+        cropRect.width,
+        cropRect.height
+    );
+
+    const croppedBase64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+    return base64ToBlob(croppedBase64, 'image/jpeg');
+}
+
+function computeQuestionCropRect(width, height) {
+    const cropWidth = Math.max(1, Math.round(width * 0.6));
+    const cropHeight = Math.max(1, Math.round(height * 0.4));
+    const cropX = Math.round(width * 0.2);
+    const cropY = Math.round(height * 0.05);
+    return {
+        x: clamp(cropX, 0, Math.max(0, width - cropWidth)),
+        y: clamp(cropY, 0, Math.max(0, height - cropHeight)),
+        width: clamp(cropWidth, 1, width),
+        height: clamp(cropHeight, 1, height),
+    };
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+async function loadImageFromBase64(base64data) {
+    if (!base64data) {
+        return null;
+    }
+
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = `data:image/jpeg;base64,${base64data}`;
+    });
 }
 
 // Conversation storage functions using IndexedDB
