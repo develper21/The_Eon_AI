@@ -1311,6 +1311,14 @@ ipcRenderer.on('hide-loader', (event) => {
     }, 100);
 });
 
+// Emergency stop handler - completely disables loader during response
+ipcRenderer.on('emergency-stop-loader', (event) => {
+    console.log('🚨 Received emergency-stop-loader event - COMPLETELY DISABLING LOADER');
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().emergencyStop();
+    }
+});
+
 // Global UI unblocker - runs every 2 seconds to ensure UI never gets stuck
 setInterval(() => {
     // Always ensure UI is interactive
