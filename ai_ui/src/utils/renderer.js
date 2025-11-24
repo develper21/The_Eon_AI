@@ -1276,12 +1276,26 @@ Format:
     }
 }
 
+// Global loader lock to prevent race conditions
+let loaderLock = false;
+
 // Handle loader events from main process
 ipcRenderer.on('show-loader', (event, message, subtext) => {
+    // Prevent multiple rapid loader calls
+    if (loaderLock) {
+        console.log('🚫 Loader show blocked by lock');
+        return;
+    }
+    
+    loaderLock = true;
+    setTimeout(() => { loaderLock = false; }, 500); // Release lock after 500ms
+    
+    console.log('📥 Received show-loader event:', message);
     EnoraLoader.show(message, subtext);
 });
 
 ipcRenderer.on('hide-loader', (event) => {
+    console.log('📥 Received hide-loader event');
     EnoraLoader.hide();
     
     // Ensure UI remains responsive by resetting any stuck states
