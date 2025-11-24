@@ -1099,6 +1099,11 @@ Format:
     
     console.log(' Sending prompt for problem', problemNum);
     
+    // Reset loader for new question
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().resetForNewQuestion();
+    }
+    
     // Update loader message for LeetCode
     EnoraLoader.updateMessage('Solving LeetCode problem', `Working on Problem ${problemNum}...`);
     
@@ -1245,6 +1250,11 @@ Format:
     
     console.log(' Sending prompt for HackerRank problem:', problemIdentifier);
     
+    // Reset loader for new question
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().resetForNewQuestion();
+    }
+    
     // Update loader message for HackerRank
     EnoraLoader.updateMessage('Solving HackerRank problem', `Working on ${problemIdentifier}...`);
     
@@ -1360,6 +1370,11 @@ async function sendTextMessage(text) {
     }
 
     try {
+        // Reset loader for new question
+        if (window.EnoraLoader) {
+            window.EnoraLoader.getInstance().resetForNewQuestion();
+        }
+        
         const result = await ipcRenderer.invoke('send-text-message', text);
         if (result.success) {
             console.log('Text message sent successfully');
