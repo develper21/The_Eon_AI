@@ -688,13 +688,9 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
-                        // Hide loader when AI starts generating response
+                        // IMMEDIATELY hide loader and send a STRONG signal to prevent any re-showing
                         sendToRenderer('hide-loader');
-                        
-                        // Safety fallback: ensure loader is hidden after 5 seconds
-                        setTimeout(() => {
-                            sendToRenderer('hide-loader');
-                        }, 5000);
+                        sendToRenderer('emergency-stop-loader');
                         
                         for (const part of message.serverContent.modelTurn.parts) {
                             console.log(part);
@@ -1016,8 +1012,6 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
                 return { success: false, error: 'Invalid image data' };
             }
 
-            // Show loader when image is sent
-            sendToRenderer('show-loader', 'Processing image', 'AI is analyzing...');
             const buffer = Buffer.from(data, 'base64');
 
             if (buffer.length < 1000) {
@@ -1046,7 +1040,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
-            // Show loader when text message is sent
+            // Show loader ONLY when text message is sent (before any response)
             sendToRenderer('show-loader', 'Processing request', 'AI is thinking...');
             await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
