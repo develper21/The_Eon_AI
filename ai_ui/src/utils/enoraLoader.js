@@ -8,6 +8,7 @@ class EnoraLoader {
         this.loadingSteps = ['processing', 'analyzing', 'generating'];
         this.stepIndex = 0;
         this.stepInterval = null;
+        this.hideTimeout = null;
     }
 
     init() {
@@ -26,19 +27,40 @@ class EnoraLoader {
     }
 
     show(message = 'Processing your request', subtext = 'AI is thinking...') {
-        if (this.isLoading) return;
-        
         this.isLoading = true;
-        this.createLoadingElements(message, subtext);
-        this.startStepAnimation();
+        
+        // Clear any existing hide timeout
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+        
+        if (this.loadingElement) {
+            // Update existing loader
+            this.updateMessage(message, subtext);
+        } else {
+            // Create new loader
+            this.createLoadingElements(message, subtext);
+            this.startStepAnimation();
+        }
     }
 
     hide() {
         if (!this.isLoading) return;
         
-        this.isLoading = false;
-        this.stopStepAnimation();
-        this.removeLoadingElements();
+        // Clear any existing hide timeout
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+        
+        // Set a short timeout to prevent flickering for rapid calls
+        this.hideTimeout = setTimeout(() => {
+            this.isLoading = false;
+            this.stopStepAnimation();
+            this.removeLoadingElements();
+            this.hideTimeout = null;
+        }, 200); // 200ms delay
     }
 
     updateMessage(message, subtext = null) {
