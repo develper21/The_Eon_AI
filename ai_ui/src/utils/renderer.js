@@ -1098,6 +1098,10 @@ Format:
 **Dry Run:** (step-by-step execution with comments)`;
     
     console.log(' Sending prompt for problem', problemNum);
+    
+    // Update loader message for LeetCode
+    EnoraLoader.updateMessage('Solving LeetCode problem', `Working on Problem ${problemNum}...`);
+    
     const result = await sendTextMessage(finalPrompt);
     
     if (!result?.success) {
@@ -1240,6 +1244,10 @@ Format:
     }
     
     console.log(' Sending prompt for HackerRank problem:', problemIdentifier);
+    
+    // Update loader message for HackerRank
+    EnoraLoader.updateMessage('Solving HackerRank problem', `Working on ${problemIdentifier}...`);
+    
     const result = await sendTextMessage(finalPrompt);
     
     if (!result?.success) {
@@ -1314,8 +1322,15 @@ async function sendTextMessage(text) {
         return { success: false, error: 'Empty message' };
     }
 
+    // Show Enora loader
+    EnoraLoader.show('Processing your request', 'AI is thinking...');
+
     try {
         const result = await ipcRenderer.invoke('send-text-message', text);
+        
+        // Hide loader when response is received
+        EnoraLoader.hide();
+        
         if (result.success) {
             console.log('Text message sent successfully');
         } else {
@@ -1323,6 +1338,8 @@ async function sendTextMessage(text) {
         }
         return result;
     } catch (error) {
+        // Hide loader on error
+        EnoraLoader.hide();
         console.error('Error sending text message:', error);
         return { success: false, error: error.message };
     }
