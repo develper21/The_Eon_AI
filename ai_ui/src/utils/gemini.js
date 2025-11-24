@@ -688,8 +688,8 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
-                        // Show loader when AI starts generating response
-                        sendToRenderer('show-loader', 'Generating response', 'AI is creating your answer...');
+                        // Hide loader when AI starts generating response
+                        sendToRenderer('hide-loader');
                         
                         for (const part of message.serverContent.modelTurn.parts) {
                             console.log(part);
@@ -702,9 +702,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     if (message.serverContent?.generationComplete) {
                         sendToRenderer('update-response', messageBuffer);
-                        
-                        // Hide loader when AI response is complete
-                        sendToRenderer('hide-loader');
 
                         // Save conversation turn when we have both transcription and AI response
                         if (currentTranscription && messageBuffer) {
@@ -979,6 +976,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write('.');
+            // Show loader when first audio chunk is sent (only once)
             await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
@@ -1013,6 +1011,8 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
                 return { success: false, error: 'Invalid image data' };
             }
 
+            // Show loader when image is sent
+            sendToRenderer('show-loader', 'Processing image', 'AI is analyzing...');
             const buffer = Buffer.from(data, 'base64');
 
             if (buffer.length < 1000) {
@@ -1041,6 +1041,8 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
+            // Show loader when text message is sent
+            sendToRenderer('show-loader', 'Processing request', 'AI is thinking...');
             await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
         } catch (error) {
