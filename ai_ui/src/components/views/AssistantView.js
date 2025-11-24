@@ -363,6 +363,7 @@ export class AssistantView extends LitElement {
         this.selectedProfile = 'interview';
         this.onSendText = () => {};
         this._lastAnimatedWordCount = 0;
+        this._lastRenderedResponse = '';
         this.partialTranscript = '';
         this.inputStatus = { state: 'idle', isSpeaking: false };
         
@@ -690,29 +691,46 @@ export class AssistantView extends LitElement {
         if (container) {
             const currentResponse = this.getCurrentResponse();
             console.log('Current response:', currentResponse);
-            const renderedResponse = this.renderMarkdown(currentResponse);
-            console.log('Rendered response:', renderedResponse);
-            container.innerHTML = renderedResponse;
-            const words = container.querySelectorAll('[data-word]');
-            if (this.shouldAnimateResponse) {
-                for (let i = 0; i < this._lastAnimatedWordCount && i < words.length; i++) {
-                    words[i].classList.add('visible');
-                }
-                for (let i = this._lastAnimatedWordCount; i < words.length; i++) {
-                    words[i].classList.remove('visible');
-                    setTimeout(() => {
-                        words[i].classList.add('visible');
-                        if (i === words.length - 1) {
-                            this.dispatchEvent(new CustomEvent('response-animation-complete', { bubbles: true, composed: true }));
+            
+            // Only update if content actually changed to prevent flickering
+            if (this._lastRenderedResponse !== currentResponse) {
+                const renderedResponse = this.renderMarkdown(currentResponse);
+                console.log('Rendered response:', renderedResponse);
+                
+                // Use a more gentle update approach to prevent flickering
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderedResponse;
+                const newWords = tempDiv.querySelectorAll('[data-word]');
+                
+                // Clear and update only if we have new content
+                if (newWords.length > 0) {
+                    container.innerHTML = renderedResponse;
+                    const words = container.querySelectorAll('[data-word]');
+                    
+                    if (this.shouldAnimateResponse) {
+                        // Only animate new words
+                        for (let i = 0; i < this._lastAnimatedWordCount && i < words.length; i++) {
+                            words[i].classList.add('visible');
                         }
-                    }, (i - this._lastAnimatedWordCount) * 100);
+                        for (let i = this._lastAnimatedWordCount; i < words.length; i++) {
+                            words[i].classList.remove('visible');
+                            setTimeout(() => {
+                                words[i].classList.add('visible');
+                                if (i === words.length - 1) {
+                                    this.dispatchEvent(new CustomEvent('response-animation-complete', { bubbles: true, composed: true }));
+                                }
+                            }, (i - this._lastAnimatedWordCount) * 50); // Reduced delay for smoother animation
+                        }
+                        this._lastAnimatedWordCount = words.length;
+                    } else {
+                        words.forEach(word => word.classList.add('visible'));
+                        this._lastAnimatedWordCount = words.length;
+                    }
+                    this.highlightCodeBlocks();
                 }
-                this._lastAnimatedWordCount = words.length;
-            } else {
-                words.forEach(word => word.classList.add('visible'));
-                this._lastAnimatedWordCount = words.length;
+                
+                this._lastRenderedResponse = currentResponse;
             }
-            this.highlightCodeBlocks();
         } else {
             console.log('Response container not found');
         }
