@@ -1287,6 +1287,22 @@ ipcRenderer.on('hide-loader', (event) => {
     }, 100);
 });
 
+// Global UI unblocker - runs every 2 seconds to ensure UI never gets stuck
+setInterval(() => {
+    // Always ensure UI is interactive
+    document.body.style.pointerEvents = '';
+    document.body.style.userSelect = '';
+    
+    // Force hide any stuck loader
+    if (window.EnoraLoader && window.EnoraLoader.getInstance().isLoading) {
+        // If loader has been visible for more than 10 seconds, hide it
+        const loaderInstance = window.EnoraLoader.getInstance();
+        if (loaderInstance._showTime && (Date.now() - loaderInstance._showTime) > 10000) {
+            loaderInstance.hide();
+        }
+    }
+}, 2000);
+
 // Expose functions to global scope for external access
 window.captureManualScreenshot = captureManualScreenshot;
 window.captureLeetScreenshot = captureLeetScreenshot;
