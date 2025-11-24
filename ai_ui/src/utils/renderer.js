@@ -1319,10 +1319,11 @@ setInterval(() => {
     
     // Force hide any stuck loader
     if (window.EnoraLoader && window.EnoraLoader.getInstance().isLoading) {
-        // If loader has been visible for more than 10 seconds, hide it
+        // If loader has been visible for more than 5 seconds, emergency stop
         const loaderInstance = window.EnoraLoader.getInstance();
-        if (loaderInstance._showTime && (Date.now() - loaderInstance._showTime) > 10000) {
-            loaderInstance.hide();
+        if (loaderInstance._showTime && (Date.now() - loaderInstance._showTime) > 5000) {
+            console.log('🚨 Loader stuck for 5+ seconds - EMERGENCY STOP');
+            loaderInstance.emergencyStop();
         }
     }
 }, 2000);
