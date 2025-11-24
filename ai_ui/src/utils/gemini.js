@@ -691,6 +691,11 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                         // Hide loader when AI starts generating response
                         sendToRenderer('hide-loader');
                         
+                        // Safety fallback: ensure loader is hidden after 5 seconds
+                        setTimeout(() => {
+                            sendToRenderer('hide-loader');
+                        }, 5000);
+                        
                         for (const part of message.serverContent.modelTurn.parts) {
                             console.log(part);
                             if (part.text) {
