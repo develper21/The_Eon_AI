@@ -226,6 +226,12 @@ function setupGeneralIpcHandlers() {
         }
     });
 
+    ipcMain.on('emergency-stop-loader', (event) => {
+        if (mainWindow) {
+            mainWindow.webContents.send('emergency-stop-loader');
+        }
+    });
+
     ipcMain.handle('update-content-protection', async (event, contentProtection) => {
         try {
             if (mainWindow) {
