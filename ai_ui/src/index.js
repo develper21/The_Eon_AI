@@ -10,6 +10,7 @@ const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer } = requir
 const { initializeRandomProcessNames } = require('./utils/processRandomizer');
 const { applyAntiAnalysisMeasures } = require('./utils/stealthFeatures');
 const { getLocalConfig, writeConfig } = require('./config');
+const { generateInterviewPdf } = require('./utils/interviewPdf');
 
 const geminiSessionRef = { current: null };
 let mainWindow = null;
@@ -98,6 +99,8 @@ async function checkVersion() {
 
 function createMainWindow() {
     mainWindow = createWindow(sendToRenderer, geminiSessionRef, randomNames);
+    // Make mainWindow globally available for PDF logging
+    global.mainWindow = mainWindow;
     return mainWindow;
 }
 
@@ -233,6 +236,21 @@ function setupGeneralIpcHandlers() {
         } catch (error) {
             console.error('Error getting random display name:', error);
             return 'System Monitor';
+        }
+    });
+
+    ipcMain.handle('generate-interview-pdf', async (event, session) => {
+        console.log('[MAIN] generate-interview-pdf IPC handler called');
+        console.log('[MAIN] Session data:', session ? { sessionId: session.sessionId, timestamp: session.timestamp, historyLength: session.conversationHistory ? session.conversationHistory.length : 0 } : 'null');
+        
+        try {
+            const result = await generateInterviewPdf(session || {});
+            console.log('[MAIN] PDF generation result:', result);
+            return result;
+        } catch (error) {
+            console.error('[MAIN] Error generating interview PDF:', error);
+            console.error('[MAIN] Error stack:', error.stack);
+            return { success: false, error: error.message };
         }
     });
 }
