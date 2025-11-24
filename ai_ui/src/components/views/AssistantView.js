@@ -704,57 +704,23 @@ export class AssistantView extends LitElement {
                     const renderedResponse = this.renderMarkdown(currentResponse);
                     console.log('Rendered response:', renderedResponse);
                     
-                    // Use append-only approach to prevent flickering
-                    if (this.shouldAnimateResponse && this._lastRenderedResponse) {
-                        // For streaming responses, append only new content
-                        const newContent = currentResponse.substring(this._lastRenderedResponse.length);
-                        if (newContent.trim()) {
-                            // Render just the new part and append
-                            const newRendered = this.renderMarkdown(newContent);
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = newRendered;
-                            
-                            // Append new content to existing container
-                            const newElements = Array.from(tempDiv.childNodes);
-                            newElements.forEach(el => {
-                                if (el.nodeType === Node.TEXT_NODE && el.textContent.trim()) {
-                                    // Wrap text nodes in spans for animation
-                                    const span = document.createElement('span');
-                                    span.setAttribute('data-word', '');
-                                    span.textContent = el.textContent;
-                                    span.style.opacity = '0';
-                                    container.appendChild(span);
-                                    
-                                    // Animate in
-                                    setTimeout(() => {
-                                        span.style.transition = 'opacity 0.3s ease-in';
-                                        span.style.opacity = '1';
-                                    }, 10);
-                                } else if (el.nodeType === Node.ELEMENT_NODE) {
-                                    container.appendChild(el.cloneNode(true));
-                                }
-                            });
-                        }
+                    // Simple, reliable approach - just update the content
+                    container.innerHTML = renderedResponse;
+                    const words = container.querySelectorAll('[data-word]');
+                    
+                    if (this.shouldAnimateResponse) {
+                        // Show all words immediately for streaming (no animation to prevent flickering)
+                        words.forEach(word => word.classList.add('visible'));
+                        this._lastAnimatedWordCount = words.length;
                     } else {
-                        // Full update for initial load or when animation is disabled
-                        container.innerHTML = renderedResponse;
-                        const words = container.querySelectorAll('[data-word]');
-                        
-                        if (this.shouldAnimateResponse) {
-                            // Show all words immediately for streaming
-                            words.forEach(word => word.classList.add('visible'));
-                            this._lastAnimatedWordCount = words.length;
-                        } else {
-                            words.forEach(word => word.classList.add('visible'));
-                            this._lastAnimatedWordCount = words.length;
-                        }
-                        
-                        this.highlightCodeBlocks();
+                        words.forEach(word => word.classList.add('visible'));
+                        this._lastAnimatedWordCount = words.length;
                     }
                     
+                    this.highlightCodeBlocks();
                     this._lastRenderedResponse = currentResponse;
                 }
-            }, 50); // 50ms debounce
+            }, 100); // 100ms debounce to prevent rapid updates
         } else {
             console.log('Response container not found');
         }
