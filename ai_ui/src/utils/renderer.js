@@ -1319,6 +1319,13 @@ ipcRenderer.on('emergency-stop-loader', (event) => {
     }
 });
 
+ipcRenderer.on('switch-to-processing', (event) => {
+    console.log('📥 Received switch-to-processing event');
+    if (window.EnoraLoader) {
+        window.EnoraLoader.switchToProcessing();
+    }
+});
+
 // Global UI unblocker - runs every 2 seconds to ensure UI never gets stuck
 setInterval(() => {
     // Always ensure UI is interactive
