@@ -91,11 +91,6 @@ class InputBuffer {
                 this.speechStartTime = now;
                 this.setState('listening');
                 console.log('🎤 Speech detected - starting to listen');
-                
-                // Show loader when user starts speaking
-                if (typeof EnoraLoader !== 'undefined') {
-                    EnoraLoader.show('Listening...');
-                }
             }
         }
         
