@@ -203,13 +203,19 @@ export class MainView extends LitElement {
   async verifyAccessCode() {
     console.log('[VERIFY] Starting access code verification...');
     console.log('[VERIFY] Access code entered:', this.accessCode);
+    console.log('[VERIFY] Usage count:', this.usageCount, '/10');
     console.log('[VERIFY] Usage limit reached:', this.usageLimitReached);
     
-    // Check usage limit first
-    if (this.usageLimitReached) {
+    // Force refresh usage count to ensure it's current
+    await this.fetchUsageCount();
+    
+    // Check usage limit first - be very strict about this
+    if (this.usageCount >= 10 || this.usageLimitReached) {
       this.showAccessCodeError = true;
-      this.accessCodeErrorMessage = '❌ Usage limit reached (10/10 sessions). Access codes are no longer valid.';
-      console.log('[VERIFY] Verification failed - usage limit reached');
+      this.accessCodeErrorMessage = `❌ USAGE LIMIT REACHED (${this.usageCount}/10 sessions). No more access codes will be accepted.`;
+      this.isAccessVerified = false;
+      localStorage.setItem('accessVerified', 'false');
+      console.log('[VERIFY] Verification FAILED - usage limit reached. Blocking all access.');
       return false;
     }
 
@@ -229,6 +235,7 @@ export class MainView extends LitElement {
       this.showAccessCodeError = false;
       this.accessCodeErrorMessage = '';
       console.log('[VERIFY] Verification successful - access code is valid');
+      console.log('[VERIFY] Sessions remaining:', 10 - this.usageCount);
       return true;
     } else {
       this.showAccessCodeError = true;

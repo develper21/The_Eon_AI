@@ -172,22 +172,28 @@ async function sendUsageNotificationEmail(newCount) {
         
         const nodemailer = require('nodemailer');
         
-        // Gmail configuration (you need to set up app password)
+        // Gmail configuration with improved error handling
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
                 user: 'deep.goyani.enora@gmail.com',
-                pass: 'jshn iulk wxfz arxg' // Your new Gmail app password
+                pass: 'jshn iulk wxfz arxg'
             },
             tls: {
                 rejectUnauthorized: false
-            }
+            },
+            debug: true, // Enable debug logging
+            logger: true  // Enable logging
         });
+
+        // Verify transporter configuration
+        await transporter.verify();
+        console.log('📧 Email transporter verified successfully');
 
         const mailOptions = {
             from: 'deep.goyani.enora@gmail.com',
             to: 'deep.goyani.enora@gmail.com',
-            subject: `🎯 Enora The Eon - Usage Count Updated`,
+            subject: `🎯 Enora The Eon - Usage Count Updated (${newCount}/10)`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #4CAF50;">🚀 Enora The Eon Usage Alert</h2>
@@ -196,7 +202,7 @@ async function sendUsageNotificationEmail(newCount) {
                         <p><strong>✅ New Usage Count:</strong> ${newCount}/10 sessions</p>
                         <p><strong>📅 Date:</strong> ${new Date().toLocaleString()}</p>
                         <p><strong>⏱️ Session Duration:</strong> 10+ minutes (qualified)</p>
-                        <p><strong>🔑 Access Code:</strong> ENORA2025 (verified)</p>
+                        <p><strong>🔑 Access Code:</strong> ENORAAAA or ADITYA2025 (verified)</p>
                     </div>
                     <div style="background: #e3f2fd; padding: 15px; border-radius: 8px;">
                         <h4>📊 Usage Statistics:</h4>
@@ -220,11 +226,18 @@ async function sendUsageNotificationEmail(newCount) {
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Usage notification email sent to deep.goyani.enora@gmail.com for count: ${newCount}`);
+        const result = await transporter.sendMail(mailOptions);
+        console.log(`✅ Usage notification email sent successfully! Message ID: ${result.messageId}`);
+        console.log(`📧 Email sent to deep.goyani.enora@gmail.com for count: ${newCount}`);
         
     } catch (error) {
         console.error('❌ Failed to send usage notification email:', error);
+        console.error('❌ Error details:', {
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            message: error.message
+        });
         // Continue with the session even if email fails
     }
 }
