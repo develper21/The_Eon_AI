@@ -142,7 +142,9 @@ export class MainView extends LitElement {
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
     this.apiKey = localStorage.getItem('apiKey') || 'AIzaSyBkY7s3xhQ2w9zL1mN4oP5qR6sT7uV8wX9';
-    this.accessCode = localStorage.getItem('accessCode') || '';
+    // Clear access code from localStorage to ensure it's not pre-filled
+    localStorage.removeItem('accessCode');
+    this.accessCode = '';
     this.showAccessCodeError = false;
     this.isAccessVerified = localStorage.getItem('accessVerified') === 'true';
     this.usageCount = 0;
