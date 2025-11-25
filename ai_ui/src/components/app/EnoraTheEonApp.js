@@ -547,9 +547,64 @@ export class EnoraTheEonApp extends LitElement {
     }
 
     formatQuestionResponse(question, answerText) {
+        // Parse the response to extract quick and detailed answers
+        const parsedResponse = this.parseAnswerResponse(answerText);
+        
         const questionLine = `**Q (Interviewer):** ${question.text}`;
-        const answerLine = `**A (You):** ${answerText}`;
-        return `${questionLine}\n\n${answerLine}`;
+        const quickAnswerLine = `**A (You - Quick):** ${parsedResponse.quickAnswer}`;
+        const detailedAnswerLine = `**A (You - Detailed):** ${parsedResponse.detailedAnswer}`;
+        
+        return `${questionLine}\n\n${quickAnswerLine}\n\n---\n\n${detailedAnswerLine}`;
+    }
+
+    parseAnswerResponse(fullResponse) {
+        // Try to split response into quick and detailed parts
+        let quickAnswer = fullResponse;
+        let detailedAnswer = '';
+        
+        // Look for common separators between quick and detailed answers
+        const separators = [
+            '\n\nDetailed Answer:',
+            '\n\nMore Details:',
+            '\n\nExplanation:',
+            '\n\n---',
+            '\n\n**Detailed:**',
+            '\n\n**Quick Answer:**',
+            '\n\n**Answer:**',
+            '\n\n**Response:**'
+        ];
+        
+        for (const separator of separators) {
+            const parts = fullResponse.split(separator);
+            if (parts.length >= 2) {
+                quickAnswer = parts[0].trim();
+                detailedAnswer = separator + parts.slice(1).join(separator);
+                break;
+            }
+        }
+        
+        // If no separator found, try to create a quick answer from first paragraph
+        if (detailedAnswer === '') {
+            const paragraphs = fullResponse.split('\n\n');
+            if (paragraphs.length > 1) {
+                quickAnswer = paragraphs[0].trim();
+                detailedAnswer = '\n\n**Detailed Answer:**\n\n' + paragraphs.slice(1).join('\n\n');
+            } else {
+                // Single paragraph - split it logically
+                const sentences = fullResponse.split('. ');
+                if (sentences.length > 2) {
+                    quickAnswer = sentences.slice(0, 2).join('. ') + '.';
+                    detailedAnswer = '\n\n**Detailed Answer:**\n\n' + sentences.slice(2).join('. ');
+                } else {
+                    detailedAnswer = '\n\n**Detailed Answer:**\n\n' + fullResponse;
+                }
+            }
+        }
+        
+        return {
+            quickAnswer: quickAnswer.replace(/\*\*/g, '').trim(),
+            detailedAnswer: detailedAnswer.trim()
+        };
     }
 
     completeActiveQuestion(success, errorMessage = '') {

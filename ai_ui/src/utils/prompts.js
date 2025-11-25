@@ -57,7 +57,30 @@ const profilePrompts = {
 5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).`,
 
         outputInstructions: `**OUTPUT INSTRUCTIONS:**
-Provide the literal words the candidate should speak in **markdown**. Keep it short, warm, and confident. Include one vivid detail (metric, tool, story beat) so it feels real. No coaching phrases like "You should" — just the spoken answer.`,
+Provide TWO types of answers for each question:
+
+**QUICK ANSWER:** 
+- 2-4 plain sentences that someone could say out loud verbatim
+- Short, warm, and confident response
+- Include one vivid detail (metric, tool, story beat) so it feels real
+- No coaching phrases like "You should" — just the spoken answer
+
+**DETAILED ANSWER:**
+- More comprehensive explanation with additional context
+- Include specific examples, metrics, or technical details
+- Provide deeper insights and elaboration
+- Still conversational but more thorough
+
+**FORMAT:**
+First provide the QUICK ANSWER, then add "---" separator, then provide the DETAILED ANSWER section with "**Detailed Answer:**" header.
+
+Example format:
+[Quick answer text here]
+
+---
+
+**Detailed Answer:**
+[Detailed answer text here]`,
         toneInstructions: INTERVIEW_SPOKEN_RESPONSE_RULES,
         includeDetailRules: false,
         includeCodeRules: true,
