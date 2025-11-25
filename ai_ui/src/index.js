@@ -72,7 +72,30 @@ function setupAutoUpdater() {
     setInterval(checkForUpdates, CHECK_INTERVAL_MS);
 }
 
+async function checkVersion() {
+    const currentVersion = app.getVersion();  // version from package.json
 
+    try {
+        const response = await fetch("https://raw.githubusercontent.com/develper21/access_config/main/access_config/version.json");  
+        const data = await response.json();
+
+        if (data.version !== currentVersion) {
+            dialog.showMessageBoxSync({
+                type: "warning",
+                buttons: ["Update Now"],
+                title: "Update Required",
+                message: `Your version (${currentVersion}) is outdated.\nPlease update to continue.`
+            });
+
+            app.quit(); // Force exit if version mismatch
+        }
+    } catch (err) {
+        console.error("Version check failed:", err);
+
+        // Optional: block or allow
+        // app.quit(); // uncomment to block if server not reachable
+    }
+}
 
 function createMainWindow() {
     mainWindow = createWindow(sendToRenderer, geminiSessionRef, randomNames);
