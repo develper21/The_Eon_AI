@@ -702,14 +702,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                         // Hide loader after response starts
                         sendToRenderer('hide-loader');
                         sendToRenderer('emergency-stop-loader');
-                        
-                        for (const part of message.serverContent.modelTurn.parts) {
-                            console.log(part);
-                            if (part.text) {
-                                messageBuffer += part.text;
-                                sendToRenderer('update-response', messageBuffer);
-                            }
-                        }
                     }
 
                     if (message.serverContent?.generationComplete) {
