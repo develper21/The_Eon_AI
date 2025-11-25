@@ -84,9 +84,16 @@ function createMainWindow() {
 // Usage counter functions
 const fs = require('fs');
 const path = require('path');
+const { app } = require('electron');
 
-const USAGE_FILE = path.join(__dirname, '..', 'usage-count.json');
-const SETTINGS_FILE = path.join(__dirname, '..', 'usage-settings.json');
+// Use app data directory for reliable file storage in deployed environment
+const userDataPath = app ? app.getPath('userData') : path.join(__dirname, '..');;
+const USAGE_FILE = path.join(userDataPath, 'usage-count.json');
+const SETTINGS_FILE = path.join(userDataPath, 'usage-settings.json');
+
+console.log('[USAGE] Using data directory:', userDataPath);
+console.log('[USAGE] Usage file path:', USAGE_FILE);
+console.log('[USAGE] Settings file path:', SETTINGS_FILE);
 
 // Default settings
 let SESSION_DURATION_LIMIT = 10 * 60 * 1000; // 10 minutes (usage increments only after 10 min)
@@ -133,22 +140,28 @@ function saveUsageSettings() {
 loadUsageSettings();
 
 function startSessionTimer() {
-    sessionStartTime = Date.now();
-    console.log(`Session timer started - will increment after ${SESSION_DURATION_LIMIT/1000} seconds`);
-    
-    // Clear any existing timer
     if (sessionTimer) {
         clearTimeout(sessionTimer);
     }
     
+    sessionStartTime = Date.now();
+    console.log(`[TIMER] Session started at ${new Date(sessionStartTime).toLocaleTimeString()}`);
+    console.log(`[TIMER] Will increment usage after ${SESSION_DURATION_LIMIT/1000} seconds`);
+    
     // Set timer to check session duration
     sessionTimer = setTimeout(() => {
-        console.log(`Session lasted ${SESSION_DURATION_LIMIT/1000}+ seconds - incrementing usage count`);
+        const sessionDuration = Date.now() - sessionStartTime;
+        console.log(`[TIMER] Session completed! Duration: ${Math.round(sessionDuration/1000)} seconds`);
+        console.log(`[TIMER] Incrementing usage count...`);
+        
         incrementUsageCount();
         sessionStartTime = null;
+        sessionTimer = null;
+        
+        console.log(`[TIMER] Session timer completed and cleaned up`);
     }, SESSION_DURATION_LIMIT);
     
-    console.log(`Timer scheduled for ${new Date(Date.now() + SESSION_DURATION_LIMIT).toLocaleTimeString()}`);
+    console.log(`[TIMER] Usage increment scheduled for ${new Date(Date.now() + SESSION_DURATION_LIMIT).toLocaleTimeString()}`);
 }
 
 function endSessionTimer() {
@@ -246,13 +259,25 @@ function incrementUsageCount() {
     let usageCount = 0;
     
     console.log('[INCREMENT] Starting usage count increment...');
+    console.log('[INCREMENT] Usage file path:', USAGE_FILE);
     
     try {
+        // Ensure directory exists
+        const dir = path.dirname(USAGE_FILE);
+        if (!fs.existsSync(dir)) {
+            console.log('[INCREMENT] Creating directory:', dir);
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        
         // Read existing usage count
         if (fs.existsSync(USAGE_FILE)) {
             const data = fs.readFileSync(USAGE_FILE, 'utf8');
-            usageCount = parseInt(JSON.parse(data).count || '0');
+            console.log('[INCREMENT] Raw file data:', data);
+            const parsed = JSON.parse(data);
+            usageCount = parseInt(parsed.count || '0');
             console.log(`[INCREMENT] Current usage from file: ${usageCount}`);
+        } else {
+            console.log('[INCREMENT] Usage file does not exist, starting from 0');
         }
         
         // Check if usage limit reached
@@ -265,10 +290,18 @@ function incrementUsageCount() {
         usageCount++;
         
         // Save new count
-        fs.writeFileSync(USAGE_FILE, JSON.stringify({ count: usageCount }), 'utf8');
+        const newUsageData = JSON.stringify({ count: usageCount, lastUpdated: new Date().toISOString() }, null, 2);
+        fs.writeFileSync(USAGE_FILE, newUsageData, 'utf8');
         
         console.log(`[INCREMENT] Usage count incremented to ${usageCount}/${MAX_USAGE_LIMIT}`);
+        console.log(`[INCREMENT] File saved successfully to: ${USAGE_FILE}`);
         console.log(`[INCREMENT] Sending email notification to deep.goyani.enora@gmail.com`);
+        
+        // Verify file was written correctly
+        if (fs.existsSync(USAGE_FILE)) {
+            const verifyData = fs.readFileSync(USAGE_FILE, 'utf8');
+            console.log('[INCREMENT] Verification - file content after save:', verifyData);
+        }
         
         // Send email notification asynchronously (don't block the session)
         sendUsageNotificationEmail(usageCount).catch(err => {
@@ -278,6 +311,7 @@ function incrementUsageCount() {
         return usageCount;
     } catch (error) {
         console.error('[INCREMENT] Error managing usage count:', error);
+        console.error('[INCREMENT] Error stack:', error.stack);
         return usageCount;
     }
 }
