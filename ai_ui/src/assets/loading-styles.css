@@ -1,72 +1,40 @@
-/* Enora The Eon Loading Animation */
-.enora-loading-container {
+/* Simple Center Loader */
+.simple-loader {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 9999;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(15, 23, 42, 0.95);
-    border-radius: 20px;
-    padding: 40px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(100, 116, 139, 0.2);
-    backdrop-filter: blur(10px);
-    min-width: 300px;
-    min-height: 300px;
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 12px;
+    padding: 20px 30px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
-.enora-logo-container {
-    position: relative;
-    margin-bottom: 20px;
-}
-
-.enora-logo {
-    width: 120px;
-    height: 120px;
-    animation: enoraPulse 2s ease-in-out infinite;
-}
-
-.enora-logo-glow {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 120px;
-    height: 120px;
-    background: radial-gradient(circle, rgba(96, 165, 250, 0.3) 0%, transparent 70%);
-    border-radius: 50%;
-    animation: enoraGlow 2s ease-in-out infinite;
-}
-
-.enora-loading-text {
+.simple-loader-text {
     color: #e2e8f0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
-    margin-top: 15px;
     text-align: center;
-    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.enora-loading-subtext {
-    color: #94a3b8;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px;
-    margin-top: 8px;
-    text-align: center;
-    opacity: 0.7;
-}
-
-.enora-dots {
+.simple-dots {
     display: inline-flex;
     gap: 4px;
-    margin-left: 5px;
 }
 
-.enora-dot {
+.simple-dot {
     width: 8px;
     height: 8px;
     background: linear-gradient(135deg, #60a5fa, #a78bfa);
@@ -74,11 +42,6 @@
     transition: all 0.3s ease;
     opacity: 0.3;
     transform: scale(0.8);
-}
-
-.enora-dot.active {
-    opacity: 1;
-    transform: scale(1.2);
 }
 
 /* Animations */
