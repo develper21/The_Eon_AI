@@ -67,16 +67,19 @@
 }
 
 .enora-dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     background: linear-gradient(135deg, #60a5fa, #a78bfa);
     border-radius: 50%;
-    animation: enoraDotBounce 1.4s ease-in-out infinite;
+    transition: all 0.3s ease;
+    opacity: 0.3;
+    transform: scale(0.8);
 }
 
-.enora-dot:nth-child(1) { animation-delay: -0.32s; }
-.enora-dot:nth-child(2) { animation-delay: -0.16s; }
-.enora-dot:nth-child(3) { animation-delay: 0s; }
+.enora-dot.active {
+    opacity: 1;
+    transform: scale(1.2);
+}
 
 /* Animations */
 @keyframes enoraPulse {
@@ -150,14 +153,10 @@
 }
 
 /* Loading states */
-.enora-loading-container.processing {
+.enora-loading-container.listening {
     border-color: rgba(96, 165, 250, 0.5);
 }
 
-.enora-loading-container.analyzing {
+.enora-loading-container.processing {
     border-color: rgba(167, 139, 250, 0.5);
-}
-
-.enora-loading-container.generating {
-    border-color: rgba(244, 114, 182, 0.5);
 }
