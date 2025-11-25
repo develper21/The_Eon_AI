@@ -874,6 +874,8 @@ export class EnoraTheEonApp extends LitElement {
             if (!window.cheddar || !window.cheddar.getAllConversationSessions) {
                 console.log('[APP] Session data not available - cheddar object:', !!window.cheddar, 'getAllConversationSessions:', !!(window.cheddar && window.cheddar.getAllConversationSessions));
                 this.setStatus('Session data not available');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -884,6 +886,8 @@ export class EnoraTheEonApp extends LitElement {
             if (!Array.isArray(allSessions) || allSessions.length === 0) {
                 console.log('[APP] No interview sessions found');
                 this.setStatus('No interview sessions found');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -904,6 +908,8 @@ export class EnoraTheEonApp extends LitElement {
             if (runSessions.length === 0) {
                 console.log('[APP] No sessions available for PDF');
                 this.setStatus('No sessions available for PDF');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -922,6 +928,8 @@ export class EnoraTheEonApp extends LitElement {
             if (combinedHistory.length === 0) {
                 console.log('[APP] No interview data to export');
                 this.setStatus('No interview data to export');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
