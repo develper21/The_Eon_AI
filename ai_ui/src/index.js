@@ -145,19 +145,19 @@ function startSessionTimer() {
     
     sessionStartTime = Date.now();
     console.log(`[TIMER] Session started at ${new Date(sessionStartTime).toLocaleTimeString()}`);
-    console.log(`[TIMER] Will increment usage after ${SESSION_DURATION_LIMIT/1000} seconds`);
+    console.log(`[TIMER] Will increment usage after ${SESSION_DURATION_LIMIT/1000} seconds of active usage`);
     
     // Set timer to check session duration
     sessionTimer = setTimeout(() => {
         const sessionDuration = Date.now() - sessionStartTime;
-        console.log(`[TIMER] Session completed! Duration: ${Math.round(sessionDuration/1000)} seconds`);
+        console.log(`[TIMER] Session qualified! Duration: ${Math.round(sessionDuration/1000)} seconds`);
         console.log(`[TIMER] Incrementing usage count...`);
         
         incrementUsageCount();
         sessionStartTime = null;
         sessionTimer = null;
         
-        console.log(`[TIMER] Session timer completed and cleaned up`);
+        console.log(`[TIMER] Usage increment completed - session qualified for usage count`);
     }, SESSION_DURATION_LIMIT);
     
     console.log(`[TIMER] Usage increment scheduled for ${new Date(Date.now() + SESSION_DURATION_LIMIT).toLocaleTimeString()}`);
@@ -168,7 +168,7 @@ function endSessionTimer() {
         clearTimeout(sessionTimer);
         sessionTimer = null;
         sessionStartTime = null;
-        console.log('Session timer ended');
+        console.log('[TIMER] Session timer ended - usage only increments after 10 minutes of active usage');
     }
 }
 
@@ -214,7 +214,7 @@ async function sendUsageNotificationEmail(newCount) {
                         <p><strong>✅ New Usage Count:</strong> ${newCount}/10 sessions</p>
                         <p><strong>📅 Date:</strong> ${new Date().toLocaleString()}</p>
                         <p><strong>⏱️ Session Duration:</strong> 10+ minutes (qualified)</p>
-                        <p><strong>🔑 Access Code:</strong> enoraa (verified)</p>
+                        <p><strong>🔑 Access Code:</strong> enoraa(verified)</p>
                     </div>
                     <div style="background: #e3f2fd; padding: 15px; border-radius: 8px;">
                         <h4>📊 Usage Statistics:</h4>

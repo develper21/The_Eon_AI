@@ -692,8 +692,30 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                         connectionManager.handleAcknowledgements(ackSeqs);
                     }
 
-                    if (message.serverContent?.inputTranscription?.results) {
-                        currentTranscription += formatSpeakerResults(message.serverContent.inputTranscription.results);
+                    const transcriptionPayload = message.serverContent?.inputTranscription;
+                    if (transcriptionPayload) {
+                        let transcriptionText = '';
+
+                        if (transcriptionPayload.results) {
+                            transcriptionText = formatSpeakerResults(transcriptionPayload.results);
+                        } else if (typeof transcriptionPayload.text === 'string') {
+                            transcriptionText = transcriptionPayload.text;
+                        }
+
+                        if (transcriptionText) {
+                            currentTranscription += transcriptionText;
+
+                            // CRITICAL FIX: Create question ID for voice input like text input
+                            if (!activeQuestionId && transcriptionText.trim()) {
+                                const questionId = `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                activeQuestionId = questionId;
+                                questionBuffers.set(questionId, ''); // Start with empty buffer for this question
+
+                                console.log('[VOICE INPUT] Detected voice question:', transcriptionText.trim());
+                                console.log('[VOICE INPUT] Created question ID:', questionId);
+                                console.log('[BUFFER ISOLATION] Created isolated buffer for voice question');
+                            }
+                        }
                     }
 
                     // Handle AI model response
@@ -743,26 +765,31 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                                 currentTranscription = ''; // Reset for next turn
                             }
                             
-                            // Clean up the buffer for this question
-                            questionBuffers.delete(activeQuestionId);
-                            console.log('[BUFFER CLEANUP] Removed buffer for question:', activeQuestionId);
-                            activeQuestionId = null; // Clear active question
+
+                            // DELAYED CLEANUP: Wait a bit before clearing buffers to catch any late chunks
+                            setTimeout(() => {
+                                // Clean up the buffer for this question
+                                questionBuffers.delete(activeQuestionId);
+                                console.log('[BUFFER CLEANUP] Removed buffer for question:', activeQuestionId);
+                                activeQuestionId = null; // Clear active question
+
+                                sendToRenderer('reset-chat', {
+                                    reason: 'generationComplete',
+                                    timestamp: Date.now(),
+                                    sessionId: currentSessionId,
+                                });
+                                // Do NOT reinitialize the session here; new questions will perform their own nuclear reset
+                                messageBuffer = '';
+                                turnsSinceRefresh += 1;
+                                if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
+                                    console.log('[AUTO-REFRESH] Turn limit reached, refreshing session');
+                                    refreshLiveSession('auto-turn-limit');
+                                }
+                            }, 2000); // Wait 2 seconds before cleanup
                         } else {
                             console.log('[FINAL] No active question buffer - discarding response');
                             console.log('[FINAL] Active question ID:', activeQuestionId);
                             console.log('[FINAL] Available buffers:', Array.from(questionBuffers.keys()));
-                        }
-
-                        sendToRenderer('reset-chat', {
-                            reason: 'generationComplete',
-                            timestamp: Date.now(),
-                            sessionId: currentSessionId,
-                        });
-                        initializeNewSession();
-                        messageBuffer = '';
-                        turnsSinceRefresh += 1;
-                        if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
-                            refreshLiveSession('turn-threshold');
                         }
                     }
 
@@ -1081,14 +1108,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
                 return { success: false, error: 'Invalid text message' };
             }
 
-            // CRITICAL FIX: Create unique question ID and isolated buffer
-            const questionId = `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            activeQuestionId = questionId;
-            questionBuffers.set(questionId, ''); // Start with empty buffer for this question
-            
             console.log('[NEW MESSAGE] Sending text message:', text);
-            console.log('[QUESTION ID] New question ID:', questionId);
-            console.log('[BUFFER ISOLATION] Created isolated buffer for question');
             
             // NUCLEAR RESET: Complete context wipeout for fresh start
             console.log('[NUCLEAR RESET] COMPLETELY ERASING ALL PREVIOUS CONTEXT');
@@ -1109,6 +1129,14 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             
             // Small delay to ensure reset is processed
             await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // CRITICAL FIX: Create unique question ID and isolated buffer AFTER reset
+            const questionId = `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            activeQuestionId = questionId;
+            questionBuffers.set(questionId, ''); // Start with empty buffer for this question
+            
+            console.log('[QUESTION ID] New question ID:', questionId);
+            console.log('[BUFFER ISOLATION] Created isolated buffer for question');
             
             // Now send the actual question
             await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
