@@ -688,7 +688,18 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
-                        // IMMEDIATELY hide loader and send a STRONG signal to prevent any re-showing
+                        // Switch to processing mode when first response word arrives
+                        sendToRenderer('switch-to-processing');
+                        
+                        for (const part of message.serverContent.modelTurn.parts) {
+                            console.log(part);
+                            if (part.text) {
+                                messageBuffer += part.text;
+                                sendToRenderer('update-response', messageBuffer);
+                            }
+                        }
+                        
+                        // Hide loader after response starts
                         sendToRenderer('hide-loader');
                         sendToRenderer('emergency-stop-loader');
                         
