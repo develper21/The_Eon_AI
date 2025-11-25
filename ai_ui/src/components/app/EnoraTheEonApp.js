@@ -666,8 +666,13 @@ export class EnoraTheEonApp extends LitElement {
                 response.toLowerCase().includes('go on') ||
                 response.toLowerCase().includes('continue'));
 
-        if (this._awaitingNewResponse || this.responses.length === 0) {
-            // Always add as new response when explicitly waiting for one
+        // Check if this is a complete structured answer (contains both quick and detailed parts)
+        const isCompleteAnswer = response.includes('**Q (Interviewer):**') && 
+                                response.includes('**A (You - Quick):**') && 
+                                response.includes('**A (You - Detailed):**');
+
+        if (this._awaitingNewResponse || this.responses.length === 0 || isCompleteAnswer) {
+            // Always add as new response when explicitly waiting for one or when it's a complete structured answer
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._awaitingNewResponse = false;

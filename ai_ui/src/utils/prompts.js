@@ -66,13 +66,15 @@ Provide TWO types of answers for each question:
 - No coaching phrases like "You should" — just the spoken answer
 
 **DETAILED ANSWER:**
-- More comprehensive explanation with additional context
-- Include specific examples, metrics, or technical details
-- Provide deeper insights and elaboration
-- Still conversational but more thorough
+- Must be structured in specific point format using bold headers
+- Always include these 4 sections in order:
+  1. **Definition:** Clear explanation of what the concept/term is
+  2. **Example:** Concrete example or scenario demonstrating the concept
+  3. **Real-world Usage:** How this is used in actual practice/industry
+  4. **Types/Details:** Different types, variations, or additional technical details
 
 **FORMAT:**
-First provide the QUICK ANSWER, then add "---" separator, then provide the DETAILED ANSWER section with "**Detailed Answer:**" header.
+First provide the QUICK ANSWER, then add "---" separator, then provide the DETAILED ANSWER with the 4 required sections.
 
 Example format:
 [Quick answer text here]
@@ -80,7 +82,14 @@ Example format:
 ---
 
 **Detailed Answer:**
-[Detailed answer text here]`,
+
+**Definition:** [Clear explanation of the concept]
+
+**Example:** [Specific example or scenario]
+
+**Real-world Usage:** [How it's used in practice/industry]
+
+**Types/Details:** [Different types, variations, or additional details]`,
         toneInstructions: INTERVIEW_SPOKEN_RESPONSE_RULES,
         includeDetailRules: false,
         includeCodeRules: true,
