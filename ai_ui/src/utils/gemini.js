@@ -688,20 +688,19 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
-                        // Switch to processing mode when first response word arrives
-                        sendToRenderer('switch-to-processing');
+                        // Show loader when first response word arrives
+                        sendToRenderer('show-loader', 'Generating...');
                         
                         for (const part of message.serverContent.modelTurn.parts) {
                             console.log(part);
                             if (part.text) {
                                 messageBuffer += part.text;
                                 sendToRenderer('update-response', messageBuffer);
+                                // Hide loader immediately when first word appears
+                                sendToRenderer('hide-loader');
+                                sendToRenderer('emergency-stop-loader');
                             }
                         }
-                        
-                        // Hide loader after response starts
-                        sendToRenderer('hide-loader');
-                        sendToRenderer('emergency-stop-loader');
                     }
 
                     if (message.serverContent?.generationComplete) {
@@ -980,9 +979,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write('.');
-            // Show loader when first audio chunk is sent (only once)
-            sendToRenderer('show-loader', 'Processing...');
-            await geminiSessionRef.current.sendRealtimeInput({
+                        await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
             return { success: true };
@@ -997,9 +994,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write(',');
-            // Show loader when mic audio is being processed
-            sendToRenderer('show-loader', 'Processing...');
-            await geminiSessionRef.current.sendRealtimeInput({
+                        await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
             return { success: true };
@@ -1046,9 +1041,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
-            // Show loader ONLY when text message is sent (before any response)
-            sendToRenderer('show-loader', 'Processing...');
-            await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
+                        await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
         } catch (error) {
             console.error('Error sending text:', error);
