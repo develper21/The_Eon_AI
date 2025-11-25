@@ -130,6 +130,7 @@ export class MainView extends LitElement {
     usageCount: { type: Number },
     usageLimitReached: { type: Boolean },
     remainingUsage: { type: Number },
+    accessCodeErrorMessage: { type: String },
   };
 
   constructor() {
@@ -140,13 +141,16 @@ export class MainView extends LitElement {
     this.onLayoutModeChange = () => {};
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
-    this.apiKey = localStorage.getItem('apiKey') || '';
-    this.accessCode = localStorage.getItem('accessCode') || '';
+    this.apiKey = localStorage.getItem('apiKey') || 'AIzaSyBkY7s3xhQ2w9zL1mN4oP5qR6sT7uV8wX9';
+    // Clear access code from localStorage to ensure it's not pre-filled
+    localStorage.removeItem('accessCode');
+    this.accessCode = '';
     this.showAccessCodeError = false;
     this.isAccessVerified = localStorage.getItem('accessVerified') === 'true';
     this.usageCount = 0;
     this.usageLimitReached = false;
     this.remainingUsage = 10;
+    this.accessCodeErrorMessage = '';
   }
 
   connectedCallback() {
@@ -196,23 +200,41 @@ export class MainView extends LitElement {
   }
 
   async verifyAccessCode() {
-    // Multiple valid access codes
-    const validAccessCodes = ["ENORA2025", "AKSHAR2025", "RIDHAM2025"]; // Multiple access codes
+    console.log('[VERIFY] Starting access code verification...');
+    console.log('[VERIFY] Access code entered:', this.accessCode);
+    console.log('[VERIFY] Usage limit reached:', this.usageLimitReached);
     
-    if (!this.accessCode) {
+    // Check usage limit first
+    if (this.usageLimitReached) {
       this.showAccessCodeError = true;
+      this.accessCodeErrorMessage = '❌ Usage limit reached (10/10 sessions). Access codes are no longer valid.';
+      console.log('[VERIFY] Verification failed - usage limit reached');
       return false;
     }
 
-    if (validAccessCodes.includes(this.accessCode)) {
+    const validAccessCodes = ["ENORAAAA", "ADITYA2025"];
+    console.log('[VERIFY] Valid access codes:', validAccessCodes);
+    
+    if (!this.accessCode) {
+      this.showAccessCodeError = true;
+      this.accessCodeErrorMessage = 'Please enter an access code';
+      console.log('[VERIFY] Verification failed - no access code entered');
+      return false;
+    }
+
+    if (validAccessCodes.includes(this.accessCode.trim())) {
       this.isAccessVerified = true;
       localStorage.setItem('accessVerified', 'true');
       this.showAccessCodeError = false;
+      this.accessCodeErrorMessage = '';
+      console.log('[VERIFY] Verification successful - access code is valid');
       return true;
     } else {
       this.showAccessCodeError = true;
       this.isAccessVerified = false;
+      this.accessCodeErrorMessage = '❌ Invalid access code. Usage limit may be reached or code is incorrect.';
       localStorage.setItem('accessVerified', 'false');
+      console.log('[VERIFY] Verification failed - access code is invalid');
       return false;
     }
   }
@@ -233,7 +255,7 @@ export class MainView extends LitElement {
       return;
     }
 
-    // Start session timer (only increments after 1 minute)
+    // Start session timer (only increments after 10 minutes)
     try {
       console.log('[UI] Attempting to start session timer...');
       const { ipcRenderer } = require('electron');
@@ -309,16 +331,22 @@ export class MainView extends LitElement {
           .value=${this.accessCode}
           @input=${this.handleAccessCodeInput}
           class="${this.showAccessCodeError ? 'api-key-error' : ''}"
-          ?disabled=${this.isAccessVerified}
+          ?disabled=${this.usageLimitReached}
         />
         <button
           @click=${this.verifyAccessCode}
           class="start-button"
-          ?disabled=${this.isAccessVerified}
+          ?disabled=${this.usageLimitReached}
         >
-          ${this.isAccessVerified ? '✓ Verified' : 'Verify'}
+          ${this.usageLimitReached ? 'Limit Reached' : (this.isAccessVerified ? '✓ Verified' : 'Verify')}
         </button>
       </div>
+
+      ${this.showAccessCodeError ? html`
+        <div style="color: #ff4444; font-size: 12px; text-align: center; margin-bottom: 15px;">
+          ${this.accessCodeErrorMessage}
+        </div>
+      ` : ''}
 
       <!-- API Key Input (only enabled if access code is verified) -->
       <div class="input-group">
@@ -328,18 +356,15 @@ export class MainView extends LitElement {
           .value=${this.apiKey}
           @input=${this.handleInput}
           class="${this.showApiKeyError ? 'api-key-error' : ''}"
-          ?disabled=${!this.isAccessVerified}
+          ?disabled=${!this.isAccessVerified || this.usageLimitReached}
         />
         <button
           @click=${this.handleStartClick}
           class="start-button ${this.isInitializing ? 'initializing' : ''}"
-          ?disabled=${!this.isAccessVerified || this.usageLimitReached}
-        >
-          ${this.usageLimitReached ? 'Limit Reached' : this.getStartButtonText()}
         </button>
       </div>
-    `;
-  }
+ `;
+}
 }
 
 customElements.define('main-view', MainView);

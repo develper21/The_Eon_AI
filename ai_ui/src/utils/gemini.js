@@ -17,7 +17,7 @@ const AUTO_REFRESH_TURN_LIMIT = 6;
 
 const CONNECTION_CONSTANTS = {
     pingInterval: 60000,
-    pongTimeout: 30000,
+    pongTimeout: 30000, // Standard 30 second timeout
     sustainedFailureThreshold: 6,
     initialReconnectDelay: 1000,
     backoffMultiplier: 2,
@@ -542,8 +542,8 @@ async function refreshLiveSession(reason = 'manual') {
 async function getEnabledTools() {
     const tools = [];
 
-    // Check if Google Search is enabled (default: true)
-    const googleSearchEnabled = await getStoredSetting('googleSearchEnabled', 'true');
+    // Check if Google Search is enabled (default: false - disabled to prevent errors)
+    const googleSearchEnabled = await getStoredSetting('googleSearchEnabled', 'false');
     console.log('Google Search enabled:', googleSearchEnabled);
 
     if (googleSearchEnabled === 'true') {
@@ -688,17 +688,22 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
-                        // IMMEDIATELY hide loader and send a STRONG signal to prevent any re-showing
-                        sendToRenderer('hide-loader');
-                        sendToRenderer('emergency-stop-loader');
+                        // Show loader when AI starts generating response
+                        sendToRenderer('show-loader', 'Generating...');
                         
-                        for (const part of message.serverContent.modelTurn.parts) {
-                            console.log(part);
-                            if (part.text) {
-                                messageBuffer += part.text;
-                                sendToRenderer('update-response', messageBuffer);
+                        // Small delay to make loader visible
+                        setTimeout(() => {
+                            for (const part of message.serverContent.modelTurn.parts) {
+                                console.log(part);
+                                if (part.text) {
+                                    messageBuffer += part.text;
+                                    sendToRenderer('update-response', messageBuffer);
+                                }
                             }
-                        }
+                            // Hide loader after processing response
+                            sendToRenderer('hide-loader');
+                            sendToRenderer('emergency-stop-loader');
+                        }, 500);
                     }
 
                     if (message.serverContent?.generationComplete) {
@@ -977,8 +982,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write('.');
-            // Show loader when first audio chunk is sent (only once)
-            await geminiSessionRef.current.sendRealtimeInput({
+                        await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
             return { success: true };
@@ -993,7 +997,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write(',');
-            await geminiSessionRef.current.sendRealtimeInput({
+                        await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
             return { success: true };
@@ -1040,9 +1044,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
-            // Show loader ONLY when text message is sent (before any response)
-            sendToRenderer('show-loader', 'Processing request', 'AI is thinking...');
-            await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
+                        await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
         } catch (error) {
             console.error('Error sending text:', error);

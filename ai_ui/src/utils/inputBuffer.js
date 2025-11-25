@@ -11,20 +11,20 @@ class InputBuffer {
         
         // VAD (Voice Activity Detection) configuration
         this.vadThreshold = 0.006; // RMS threshold for speech detection
-        this.silenceThreshold = 1200; // ms of silence before finalizing
+        this.silenceThreshold = 500; // ms of silence before finalizing (faster turnaround)
         this.minSpeechDuration = 150; // minimum speech duration to consider valid
         this.lastSpeechTime = 0;
         this.lastActivityTime = 0;
         this.isSpeaking = false;
         this.speechStartTime = 0;
-        this.maxSpeechDuration = 7000; // hard stop after ~7s to avoid long waits
+        this.maxSpeechDuration = 7000; // allow up to ~7 seconds of speech before hard cutoff
         
         // Text buffer configuration
         this.textBuffer = '';
         this.textChunks = [];
         this.lastTextActivity = 0;
-        this.textSilenceThreshold = 450; // ms of no typing before considering complete
-        this.autoFinalizeIdleThreshold = 700; // finalize if nothing new for 700ms
+        this.textSilenceThreshold = 300; // ms of no typing before considering complete
+        this.autoFinalizeIdleThreshold = 400; // finalize if nothing new for 400ms
         
         // State management
         this.state = 'idle'; // idle, listening, buffering, finalizing
@@ -282,11 +282,6 @@ class InputBuffer {
                 this.finalizeInput('speech');
             }
 
-            // Auto-reset if no activity for extended period
-            if (totalSilence > 30000) { // 30 seconds
-                console.log('🔄 Auto-reset due to inactivity');
-                this.reset();
-            }
         }, 100); // Check every 100ms for responsive VAD
     }
     
