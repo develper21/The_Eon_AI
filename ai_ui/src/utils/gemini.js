@@ -1044,7 +1044,13 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
-                        await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
+            
+            // Initialize fresh conversation session for each new question
+            // This prevents answers from continuing previous questions
+            initializeNewSession();
+            console.log('[NEW SESSION] Fresh conversation started for new question');
+            
+            await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
         } catch (error) {
             console.error('Error sending text:', error);
