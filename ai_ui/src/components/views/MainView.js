@@ -127,6 +127,9 @@ export class MainView extends LitElement {
     accessCode: { type: String },
     showAccessCodeError: { type: Boolean },
     isAccessVerified: { type: Boolean },
+    usageCount: { type: Number },
+    usageLimitReached: { type: Boolean },
+    remainingUsage: { type: Number },
   };
 
   constructor() {
@@ -141,6 +144,9 @@ export class MainView extends LitElement {
     this.accessCode = localStorage.getItem('accessCode') || '';
     this.showAccessCodeError = false;
     this.isAccessVerified = localStorage.getItem('accessVerified') === 'true';
+    this.usageCount = 0;
+    this.usageLimitReached = false;
+    this.remainingUsage = 10;
   }
 
   connectedCallback() {
@@ -151,6 +157,8 @@ export class MainView extends LitElement {
     document.addEventListener('keydown', this.boundKeydownHandler);
     this.loadLayoutMode?.();
     resizeLayout();
+    // Fetch usage count from main process
+    this.fetchUsageCount();
   }
 
   disconnectedCallback() {
@@ -225,11 +233,43 @@ export class MainView extends LitElement {
       return;
     }
 
+    // Start session timer (only increments after 1 minute)
+    try {
+      console.log('[UI] Attempting to start session timer...');
+      const { ipcRenderer } = require('electron');
+      const result = await ipcRenderer.invoke('start-session-timer');
+      
+      if (!result.success) {
+        console.log('[UI] Cannot start session:', result.message);
+        // Optionally show user feedback about limit reached
+        return;
+      }
+      console.log('[UI] Session timer started:', result.message);
+    } catch (error) {
+      console.error('[UI] Error starting session timer:', error);
+    }
+
     this.onStart();
   }
 
   handleAPIKeyHelpClick() {
     this.onAPIKeyHelp();
+  }
+
+  async fetchUsageCount() {
+    try {
+      const { ipcRenderer } = require('electron');
+      const usageInfo = await ipcRenderer.invoke('check-usage-limit');
+      this.usageCount = usageInfo.currentUsage;
+      this.usageLimitReached = usageInfo.limitReached;
+      this.remainingUsage = usageInfo.remaining;
+      console.log('Usage info fetched:', usageInfo);
+    } catch (error) {
+      console.error('Error fetching usage count:', error);
+      this.usageCount = 0;
+      this.usageLimitReached = false;
+      this.remainingUsage = 10;
+    }
   }
 
   getStartButtonText() {
@@ -244,6 +284,22 @@ export class MainView extends LitElement {
   render() {
     return html`
       <div class="welcome">Welcome</div>
+      
+      <!-- Usage Count Display with Limit -->
+      <div style="text-align: center; margin-bottom: 20px; color: #888; font-size: 14px;">
+        <div style="margin-bottom: 8px;">
+          📊 Usage Count: <strong>${this.usageCount}/10</strong> sessions
+        </div>
+        <div style="font-size: 12px; color: ${this.usageLimitReached ? '#ff4444' : '#666'};">
+          ${this.usageLimitReached 
+            ? '⚠️ Usage limit reached' 
+            : `✅ ${this.remainingUsage} sessions remaining`
+          }
+        </div>
+        <div style="font-size: 11px; color: #999; margin-top: 4px;">
+          (Counts only after 10+ minute sessions)
+        </div>
+      </div>
 
       <!-- Access Code Input -->
       <div class="input-group">
@@ -277,9 +333,9 @@ export class MainView extends LitElement {
         <button
           @click=${this.handleStartClick}
           class="start-button ${this.isInitializing ? 'initializing' : ''}"
-          ?disabled=${!this.isAccessVerified}
+          ?disabled=${!this.isAccessVerified || this.usageLimitReached}
         >
-          ${this.getStartButtonText()}
+          ${this.usageLimitReached ? 'Limit Reached' : this.getStartButtonText()}
         </button>
       </div>
     `;

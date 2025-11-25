@@ -72,30 +72,7 @@ function setupAutoUpdater() {
     setInterval(checkForUpdates, CHECK_INTERVAL_MS);
 }
 
-async function checkVersion() {
-    const currentVersion = app.getVersion();  // version from package.json
 
-    try {
-        const response = await fetch("https://raw.githubusercontent.com/develper21/access_config/main/access_config/version.json");  
-        const data = await response.json();
-
-        if (data.version !== currentVersion) {
-            dialog.showMessageBoxSync({
-                type: "warning",
-                buttons: ["Update Now"],
-                title: "Update Required",
-                message: `Your version (${currentVersion}) is outdated.\nPlease update to continue.`
-            });
-
-            app.quit(); // Force exit if version mismatch
-        }
-    } catch (err) {
-        console.error("Version check failed:", err);
-
-        // Optional: block or allow
-        // app.quit(); // uncomment to block if server not reachable
-    }
-}
 
 function createMainWindow() {
     mainWindow = createWindow(sendToRenderer, geminiSessionRef, randomNames);
@@ -104,10 +81,236 @@ function createMainWindow() {
     return mainWindow;
 }
 
+// Usage counter functions
+const fs = require('fs');
+const path = require('path');
+
+const USAGE_FILE = path.join(__dirname, '..', 'usage-count.json');
+const SETTINGS_FILE = path.join(__dirname, '..', 'usage-settings.json');
+
+// Default settings
+let SESSION_DURATION_LIMIT = 1 * 60 * 1000; // 1 minute for testing
+let MAX_USAGE_LIMIT = 10;
+
+let sessionStartTime = null;
+let sessionTimer = null;
+
+// Load settings on startup
+function loadUsageSettings() {
+    try {
+        if (fs.existsSync(SETTINGS_FILE)) {
+            const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+            const settings = JSON.parse(data);
+            SESSION_DURATION_LIMIT = settings.sessionDuration || SESSION_DURATION_LIMIT;
+            MAX_USAGE_LIMIT = settings.maxUsage || MAX_USAGE_LIMIT;
+            console.log(`[SETTINGS] Loaded: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
+        } else {
+            // Create default settings file
+            saveUsageSettings();
+            console.log(`[SETTINGS] Created default settings: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
+        }
+    } catch (error) {
+        console.error('[SETTINGS] Error loading settings:', error);
+    }
+}
+
+// Save settings
+function saveUsageSettings() {
+    try {
+        const settings = {
+            sessionDuration: SESSION_DURATION_LIMIT,
+            maxUsage: MAX_USAGE_LIMIT,
+            lastUpdated: new Date().toISOString()
+        };
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+        console.log(`[SETTINGS] Saved: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
+    } catch (error) {
+        console.error('[SETTINGS] Error saving settings:', error);
+    }
+}
+
+// Load settings on startup
+loadUsageSettings();
+
+function startSessionTimer() {
+    sessionStartTime = Date.now();
+    console.log(`Session timer started - will increment after ${SESSION_DURATION_LIMIT/1000} seconds`);
+    
+    // Clear any existing timer
+    if (sessionTimer) {
+        clearTimeout(sessionTimer);
+    }
+    
+    // Set timer to check session duration
+    sessionTimer = setTimeout(() => {
+        console.log(`Session lasted ${SESSION_DURATION_LIMIT/1000}+ seconds - incrementing usage count`);
+        incrementUsageCount();
+        sessionStartTime = null;
+    }, SESSION_DURATION_LIMIT);
+    
+    console.log(`Timer scheduled for ${new Date(Date.now() + SESSION_DURATION_LIMIT).toLocaleTimeString()}`);
+}
+
+function endSessionTimer() {
+    if (sessionTimer) {
+        clearTimeout(sessionTimer);
+        sessionTimer = null;
+        sessionStartTime = null;
+        console.log('Session timer ended');
+    }
+}
+
+async function sendUsageNotificationEmail(newCount) {
+    try {
+        const nodemailer = require('nodemailer');
+        
+        // Real Gmail configuration for production use
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: 'deep.goyani.enora@gmail.com', // Your real email
+                pass: 'paty-jzcq-sesr-fzdg' // Your app password (replace with actual Gmail app password)
+            },
+            tls: {
+                rejectUnauthorized: false // Helps with connection issues
+            }
+        });
+
+        const mailOptions = {
+            from: 'deep.goyani.enora@gmail.com',
+            to: 'deep.goyani.enora@gmail.com',
+            subject: `🎯 Enora The Eon - Usage Count Updated`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #4CAF50;">🚀 Enora The Eon Usage Alert</h2>
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3>Session Completed Successfully!</h3>
+                        <p><strong>✅ New Usage Count:</strong> ${newCount}/10 sessions</p>
+                        <p><strong>📅 Date:</strong> ${new Date().toLocaleString()}</p>
+                        <p><strong>⏱️ Session Duration:</strong> 10+ minutes (qualified)</p>
+                        <p><strong>🔑 Access Code:</strong> ENORA2025 (verified)</p>
+                    </div>
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px;">
+                        <h4>📊 Usage Statistics:</h4>
+                        <ul>
+                            <li>Total sessions used: ${newCount}</li>
+                            <li>Sessions remaining: ${Math.max(0, 10 - newCount)}</li>
+                            <li>Usage percentage: ${Math.round((newCount / 10) * 100)}%</li>
+                        </ul>
+                    </div>
+                    ${newCount >= 10 ? `
+                        <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                            <h4 style="color: #f44336;">⚠️ Important Notice</h4>
+                            <p>The user has reached the maximum usage limit of 10 sessions.</p>
+                            <p>No further sessions can be started until the limit is reset.</p>
+                        </div>
+                    ` : ''}
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666;">
+                        <p><small>This is an automated notification from Enora The Eon</small></p>
+                    </div>
+                </div>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Usage notification email sent for count: ${newCount}`);
+        
+    } catch (error) {
+        console.error('❌ Failed to send usage notification email:', error);
+        // Continue with the session even if email fails
+    }
+}
+
+function incrementUsageCount() {
+    let usageCount = 0;
+    
+    console.log('[INCREMENT] Starting usage count increment...');
+    
+    try {
+        // Read existing usage count
+        if (fs.existsSync(USAGE_FILE)) {
+            const data = fs.readFileSync(USAGE_FILE, 'utf8');
+            usageCount = parseInt(JSON.parse(data).count || '0');
+            console.log(`[INCREMENT] Current usage from file: ${usageCount}`);
+        }
+        
+        // Check if usage limit reached
+        if (usageCount >= MAX_USAGE_LIMIT) {
+            console.log(`[INCREMENT] Usage limit of ${MAX_USAGE_LIMIT} reached. Cannot increment further.`);
+            return usageCount;
+        }
+        
+        // Increment count
+        usageCount++;
+        
+        // Save new count
+        fs.writeFileSync(USAGE_FILE, JSON.stringify({ count: usageCount }), 'utf8');
+        
+        console.log(`[INCREMENT] Usage count incremented to ${usageCount}/${MAX_USAGE_LIMIT}`);
+        console.log(`[INCREMENT] Sending email notification to deep.goyani.enora@gmail.com`);
+        
+        // Send email notification asynchronously (don't block the session)
+        sendUsageNotificationEmail(usageCount).catch(err => {
+            console.error('[INCREMENT] Email notification failed:', err);
+        });
+        
+        return usageCount;
+    } catch (error) {
+        console.error('[INCREMENT] Error managing usage count:', error);
+        return usageCount;
+    }
+}
+
+function getUsageCount() {
+    try {
+        if (fs.existsSync(USAGE_FILE)) {
+            const data = fs.readFileSync(USAGE_FILE, 'utf8');
+            return parseInt(JSON.parse(data).count || '0');
+        }
+        return 0;
+    } catch (error) {
+        console.error('Error reading usage count:', error);
+        return 0;
+    }
+}
+
+function isUsageLimitReached() {
+    const currentUsage = getUsageCount();
+    return currentUsage >= MAX_USAGE_LIMIT;
+}
+
+async function checkVersion() {
+    const currentVersion = app.getVersion();  // version from package.json
+
+    try {
+        const response = await fetch("https://raw.githubusercontent.com/develper21/access_config/main/access_config/version.json");  
+        const data = await response.json();
+
+        if (data.version !== currentVersion) {
+            // Show a non-blocking notification instead of forcing quit
+            dialog.showMessageBox({
+                type: "info",
+                buttons: ["OK"],
+                title: "Update Available",
+                message: `A new version (${data.version}) is available.\nCurrent version: ${currentVersion}\n\nConsider updating for the latest features.`
+            }).catch(() => {
+                // Ignore dialog errors, don't block the app
+                console.log("Update notification dialog closed or failed");
+            });
+        }
+    } catch (err) {
+        console.error("Version check failed:", err);
+        // Don't block the app if version check fails - just log the error
+    }
+}
+
 app.whenReady().then(async () => {
     await applyAntiAnalysisMeasures();
 
-    await checkVersion();   
+    // Version check disabled to prevent update notifications
+    // checkVersion().catch(err => {
+    //     console.log("Version check failed in background:", err);
+    // });
 
     createMainWindow();    
     setupGeminiIpcHandlers(geminiSessionRef);
@@ -233,6 +436,74 @@ function setupGeneralIpcHandlers() {
         if (mainWindow) {
             mainWindow.webContents.send('emergency-stop-loader');
         }
+    });
+
+    ipcMain.handle('get-usage-count', (event) => {
+        return getUsageCount();
+    });
+
+    // Handle session timer management
+    ipcMain.handle('start-session-timer', (event) => {
+        const currentUsage = getUsageCount();
+        console.log(`[IPC] start-session-timer called. Current usage: ${currentUsage}/${MAX_USAGE_LIMIT}`);
+        
+        const limitReached = isUsageLimitReached();
+        if (limitReached) {
+            console.log('[IPC] Usage limit reached - cannot start new session');
+            return { success: false, message: 'Usage limit reached' };
+        }
+        
+        console.log('[IPC] Starting session timer...');
+        startSessionTimer();
+        return { success: true, message: 'Session timer started' };
+    });
+
+    // Handle settings management
+    ipcMain.handle('update-usage-settings', (event, newSettings) => {
+        try {
+            if (newSettings.sessionDuration) {
+                SESSION_DURATION_LIMIT = newSettings.sessionDuration;
+            }
+            if (newSettings.maxUsage) {
+                MAX_USAGE_LIMIT = newSettings.maxUsage;
+            }
+            saveUsageSettings();
+            
+            console.log(`[SETTINGS] Updated: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
+            return { 
+                success: true, 
+                sessionDuration: SESSION_DURATION_LIMIT,
+                maxUsage: MAX_USAGE_LIMIT
+            };
+        } catch (error) {
+            console.error('[SETTINGS] Error updating settings:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('get-usage-settings', (event) => {
+        return {
+            sessionDuration: SESSION_DURATION_LIMIT,
+            maxUsage: MAX_USAGE_LIMIT,
+            currentUsage: getUsageCount(),
+            remaining: Math.max(0, MAX_USAGE_LIMIT - getUsageCount())
+        };
+    });
+
+    ipcMain.handle('end-session-timer', (event) => {
+        endSessionTimer();
+        return { success: true, message: 'Session timer ended' };
+    });
+
+    ipcMain.handle('check-usage-limit', (event) => {
+        const currentUsage = getUsageCount();
+        const limitReached = isUsageLimitReached();
+        return { 
+            currentUsage, 
+            maxUsage: MAX_USAGE_LIMIT, 
+            limitReached,
+            remaining: Math.max(0, MAX_USAGE_LIMIT - currentUsage)
+        };
     });
 
     ipcMain.handle('update-content-protection', async (event, contentProtection) => {

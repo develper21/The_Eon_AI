@@ -42,7 +42,7 @@ function createWindow(sendToRenderer, geminiSessionRef, randomNames = null) {
         hiddenInMissionControl: true,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false, // TODO: change to true
+            contextIsolation: false,
             backgroundThrottling: false,
             enableBlinkFeatures: 'GetDisplayMedia',
             webSecurity: true,
