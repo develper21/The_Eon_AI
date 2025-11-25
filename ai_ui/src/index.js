@@ -164,17 +164,20 @@ async function sendUsageNotificationEmail(newCount) {
     try {
         const nodemailer = require('nodemailer');
         
-        // Real Gmail configuration for production use
+        // Test email service (temporarily use Ethereal for testing)
+        let testAccount = await nodemailer.createTestAccount();
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.ethereal.email',
+            port: 587,
+            secure: false,
             auth: {
-                user: 'deep.goyani.enora@gmail.com', // Your real email
-                pass: 'paty-jzcq-sesr-fzdg' // Your app password (replace with actual Gmail app password)
-            },
-            tls: {
-                rejectUnauthorized: false // Helps with connection issues
+                user: testAccount.user,
+                pass: testAccount.pass
             }
         });
+        
+        console.log('[EMAIL] Test email credentials:', testAccount.user);
+        console.log('[EMAIL] Preview URL: https://ethereal.email/messages');
 
         const mailOptions = {
             from: 'deep.goyani.enora@gmail.com',
@@ -212,8 +215,9 @@ async function sendUsageNotificationEmail(newCount) {
             `
         };
 
-        await transporter.sendMail(mailOptions);
+        let info = await transporter.sendMail(mailOptions);
         console.log(`✅ Usage notification email sent for count: ${newCount}`);
+        console.log(`[EMAIL] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
         
     } catch (error) {
         console.error('❌ Failed to send usage notification email:', error);

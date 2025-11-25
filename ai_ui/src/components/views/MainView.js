@@ -196,15 +196,15 @@ export class MainView extends LitElement {
   }
 
   async verifyAccessCode() {
-    // Simple verification - you can change the valid access code here
-    const validAccessCode = "ENORA2025"; // Change this to your desired access code
+    // Multiple valid access codes
+    const validAccessCodes = ["ENORA2025", "AKSHAR2025", "RIDHAM2025"]; // Multiple access codes
     
     if (!this.accessCode) {
       this.showAccessCodeError = true;
       return false;
     }
 
-    if (this.accessCode === validAccessCode) {
+    if (validAccessCodes.includes(this.accessCode)) {
       this.isAccessVerified = true;
       localStorage.setItem('accessVerified', 'true');
       this.showAccessCodeError = false;
