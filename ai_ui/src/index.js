@@ -87,7 +87,7 @@ const USAGE_FILE = path.join(__dirname, '..', 'usage-count.json');
 const SETTINGS_FILE = path.join(__dirname, '..', 'usage-settings.json');
 
 // Default settings
-let SESSION_DURATION_LIMIT = 1 * 60 * 1000; // 1 minute for testing
+let SESSION_DURATION_LIMIT = 10 * 60 * 1000; // 10 minutes (usage increments only after 10 min)
 let MAX_USAGE_LIMIT = 10;
 
 let sessionStartTime = null;
@@ -160,22 +160,27 @@ function endSessionTimer() {
 
 async function sendUsageNotificationEmail(newCount) {
     try {
+        // Simple console notification (always works)
+        console.log('🎯 ===== EMAIL NOTIFICATION =====');
+        console.log(`📧 TO: deep.goyani.enora@gmail.com`);
+        console.log(`📋 SUBJECT: Enora The Eon - Usage Count Updated`);
+        console.log(`📊 USAGE COUNT: ${newCount}/10 sessions`);
+        console.log(`⏰ TIME: ${new Date().toLocaleString()}`);
+        console.log('🎯 ===== END EMAIL NOTIFICATION =====');
+        
         const nodemailer = require('nodemailer');
         
-        // Test email service (temporarily use Ethereal for testing)
-        let testAccount = await nodemailer.createTestAccount();
+        // Gmail configuration (you need to set up app password)
         const transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
+            service: 'gmail',
             auth: {
-                user: testAccount.user,
-                pass: testAccount.pass
+                user: 'deep.goyani.enora@gmail.com',
+                pass: 'jshn iulk wxfz arxg' // Your new Gmail app password
+            },
+            tls: {
+                rejectUnauthorized: false
             }
         });
-        
-        console.log('[EMAIL] Test email credentials:', testAccount.user);
-        console.log('[EMAIL] Preview URL: https://ethereal.email/messages');
 
         const mailOptions = {
             from: 'deep.goyani.enora@gmail.com',
@@ -213,9 +218,8 @@ async function sendUsageNotificationEmail(newCount) {
             `
         };
 
-        let info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Usage notification email sent for count: ${newCount}`);
-        console.log(`[EMAIL] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Usage notification email sent to deep.goyani.enora@gmail.com for count: ${newCount}`);
         
     } catch (error) {
         console.error('❌ Failed to send usage notification email:', error);

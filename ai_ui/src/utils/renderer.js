@@ -1280,7 +1280,7 @@ Format:
 let loaderLock = false;
 
 // Handle loader events from main process
-ipcRenderer.on('show-loader', (event, message, subtext) => {
+ipcRenderer.on('show-loader', (event, message) => {
     // Prevent multiple rapid loader calls
     if (loaderLock) {
         console.log('🚫 Loader show blocked by lock');
@@ -1291,7 +1291,7 @@ ipcRenderer.on('show-loader', (event, message, subtext) => {
     setTimeout(() => { loaderLock = false; }, 500); // Release lock after 500ms
     
     console.log('📥 Received show-loader event:', message);
-    EnoraLoader.show(message, subtext);
+    EnoraLoader.show(message);
 });
 
 ipcRenderer.on('hide-loader', (event) => {
@@ -1316,6 +1316,13 @@ ipcRenderer.on('emergency-stop-loader', (event) => {
     console.log('🚨 Received emergency-stop-loader event - COMPLETELY DISABLING LOADER');
     if (window.EnoraLoader) {
         window.EnoraLoader.getInstance().emergencyStop();
+    }
+});
+
+ipcRenderer.on('switch-to-processing', (event) => {
+    console.log('📥 Received switch-to-processing event');
+    if (window.EnoraLoader) {
+        window.EnoraLoader.switchToProcessing();
     }
 });
 
