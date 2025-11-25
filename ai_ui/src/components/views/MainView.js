@@ -124,6 +124,9 @@ export class MainView extends LitElement {
     onLayoutModeChange: { type: Function },
     showApiKeyError: { type: Boolean },
     apiKey: { type: String },
+    accessCode: { type: String },
+    showAccessCodeError: { type: Boolean },
+    isAccessVerified: { type: Boolean },
   };
 
   constructor() {
@@ -135,6 +138,9 @@ export class MainView extends LitElement {
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
     this.apiKey = localStorage.getItem('apiKey') || '';
+    this.accessCode = localStorage.getItem('accessCode') || '';
+    this.showAccessCodeError = false;
+    this.isAccessVerified = localStorage.getItem('accessVerified') === 'true';
   }
 
   connectedCallback() {
@@ -175,8 +181,44 @@ export class MainView extends LitElement {
     if (this.showApiKeyError) this.showApiKeyError = false;
   }
 
+  handleAccessCodeInput(e) {
+    this.accessCode = e.target.value.trim();
+    localStorage.setItem('accessCode', this.accessCode);
+    if (this.showAccessCodeError) this.showAccessCodeError = false;
+  }
+
+  async verifyAccessCode() {
+    // Simple verification - you can change the valid access code here
+    const validAccessCode = "ENORA2025"; // Change this to your desired access code
+    
+    if (!this.accessCode) {
+      this.showAccessCodeError = true;
+      return false;
+    }
+
+    if (this.accessCode === validAccessCode) {
+      this.isAccessVerified = true;
+      localStorage.setItem('accessVerified', 'true');
+      this.showAccessCodeError = false;
+      return true;
+    } else {
+      this.showAccessCodeError = true;
+      this.isAccessVerified = false;
+      localStorage.setItem('accessVerified', 'false');
+      return false;
+    }
+  }
+
   async handleStartClick() {
     if (this.isInitializing) return;
+
+    // Check access code first
+    if (!this.isAccessVerified) {
+      const isVerified = await this.verifyAccessCode();
+      if (!isVerified) {
+        return;
+      }
+    }
 
     if (!this.apiKey) {
       this.showApiKeyError = true;
@@ -203,6 +245,26 @@ export class MainView extends LitElement {
     return html`
       <div class="welcome">Welcome</div>
 
+      <!-- Access Code Input -->
+      <div class="input-group">
+        <input
+          type="password"
+          placeholder="Enter Access Code"
+          .value=${this.accessCode}
+          @input=${this.handleAccessCodeInput}
+          class="${this.showAccessCodeError ? 'api-key-error' : ''}"
+          ?disabled=${this.isAccessVerified}
+        />
+        <button
+          @click=${this.verifyAccessCode}
+          class="start-button"
+          ?disabled=${this.isAccessVerified}
+        >
+          ${this.isAccessVerified ? '✓ Verified' : 'Verify'}
+        </button>
+      </div>
+
+      <!-- API Key Input (only enabled if access code is verified) -->
       <div class="input-group">
         <input
           type="password"
@@ -210,10 +272,12 @@ export class MainView extends LitElement {
           .value=${this.apiKey}
           @input=${this.handleInput}
           class="${this.showApiKeyError ? 'api-key-error' : ''}"
+          ?disabled=${!this.isAccessVerified}
         />
         <button
           @click=${this.handleStartClick}
           class="start-button ${this.isInitializing ? 'initializing' : ''}"
+          ?disabled=${!this.isAccessVerified}
         >
           ${this.getStartButtonText()}
         </button>
