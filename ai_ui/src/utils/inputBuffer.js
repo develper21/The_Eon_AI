@@ -94,7 +94,7 @@ class InputBuffer {
                 
                 // Show loader when user starts speaking
                 if (typeof EnoraLoader !== 'undefined') {
-                    EnoraLoader.show('Listening...', 'Speak now...');
+                    EnoraLoader.show('Listening...');
                 }
             }
         }
