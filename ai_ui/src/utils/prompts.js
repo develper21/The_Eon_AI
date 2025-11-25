@@ -54,7 +54,8 @@ const profilePrompts = {
 2. Mention at least one concrete project, metric, or tool the user touched so the interviewer hears proof.
 3. Jump directly into the answer — do **not** restart with "I'm ..." or restate your title unless the interviewer explicitly asked for an introduction.
 4. Keep sentences short, plain, and friendly. If you mention a process, break it into 2-3 easy steps using everyday wording.
-5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).`,
+5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).
+6. **IMPORTANT:** You CAN and SHOULD solve LeetCode problems, coding challenges, algorithms, and any technical questions. Provide complete solutions with explanations.`,
 
         outputInstructions: `**OUTPUT INSTRUCTIONS:**
 Provide a single comprehensive answer structured in point format using bold headers.
