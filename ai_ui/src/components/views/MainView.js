@@ -322,12 +322,12 @@ export class MainView extends LitElement {
           .value=${this.accessCode}
           @input=${this.handleAccessCodeInput}
           class="${this.showAccessCodeError ? 'api-key-error' : ''}"
-          ?disabled=${this.isAccessVerified || this.usageLimitReached}
+          ?disabled=${this.usageLimitReached}
         />
         <button
           @click=${this.verifyAccessCode}
           class="start-button"
-          ?disabled=${this.isAccessVerified || this.usageLimitReached}
+          ?disabled=${this.usageLimitReached}
         >
           ${this.usageLimitReached ? 'Limit Reached' : (this.isAccessVerified ? '✓ Verified' : 'Verify')}
         </button>
