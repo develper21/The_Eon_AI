@@ -514,13 +514,8 @@ export class EnoraTheEonApp extends LitElement {
         this.updatePendingQuestion(question.id, { status: 'answering', startedAt: Date.now() });
         this.setStatus('Answering interviewer…');
 
-        // Force fresh context by clearing any existing responses
-        console.log('[FRESH ANSWER] Clearing existing responses for new question');
-        this.responses = [];
-        this.currentResponseIndex = 0;
-        this._awaitingNewResponse = true;
-
         const prompt = this.buildQuestionPrompt(question);
+        this._awaitingNewResponse = true;
 
         try {
             const result = await window.cheddar.sendTextMessage(prompt);
@@ -609,30 +604,17 @@ export class EnoraTheEonApp extends LitElement {
     }
 
     setResponse(response) {
-        // Check if this looks like a filler response (very short responses to hmm, ok, etc)
-        const isFillerResponse =
-            response.length < 30 &&
-            (response.toLowerCase().includes('hmm') ||
-                response.toLowerCase().includes('okay') ||
-                response.toLowerCase().includes('next') ||
-                response.toLowerCase().includes('go on') ||
-                response.toLowerCase().includes('continue'));
-
         // Check if this is a question-answer pair (contains both Q and A)
         const isQuestionAnswerPair = response.includes('**Q (Interviewer):**') && 
                                    response.includes('**A (You):**');
 
-        // ALWAYS update the last response for question-answer pairs to keep them on same page
         if (isQuestionAnswerPair && this.responses.length > 0) {
-            // Update the last response to keep Q&A together on same page
+            // Update the last response to keep Q&A on same page
             this.responses = [...this.responses.slice(0, this.responses.length - 1), response];
             this.currentResponseIndex = this.responses.length - 1;
-            this._awaitingNewResponse = false;
-            this._currentResponseIsComplete = false;
-            this.clearResponseWatchdog();
-            console.log('[setResponse] Updated last response to keep Q&A on same page:', response);
+            console.log('[1Q1PAGE] Updated last response - Q&A on same page:', response);
         } else if (this._awaitingNewResponse || this.responses.length === 0) {
-            // Add as new response when explicitly waiting for one or first response
+            // Create new page for new question
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._awaitingNewResponse = false;
@@ -641,14 +623,14 @@ export class EnoraTheEonApp extends LitElement {
                 this._autoResetPending = true;
             }
             this.clearResponseWatchdog();
-            console.log('[setResponse] Pushed new response:', response);
-        } else if (!this._currentResponseIsComplete && !isFillerResponse && this.responses.length > 0) {
-            // For substantial responses, update the last one (streaming behavior)
+            console.log('[1Q1PAGE] Created new page for question:', response);
+        } else if (!this._currentResponseIsComplete && this.responses.length > 0) {
+            // Update the last response (streaming behavior)
             this.responses = [...this.responses.slice(0, this.responses.length - 1), response];
             this.clearResponseWatchdog();
-            console.log('[setResponse] Updated last response:', response);
+            console.log('[1Q1PAGE] Streaming update - same page:', response);
         } else {
-            // For filler responses or when current response is complete, add as new
+            // Add as new response
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._currentResponseIsComplete = false;
@@ -656,7 +638,7 @@ export class EnoraTheEonApp extends LitElement {
                 this._autoResetPending = true;
             }
             this.clearResponseWatchdog();
-            console.log('[setResponse] Added response as new:', response);
+            console.log('[1Q1PAGE] Added new response:', response);
         }
         this.shouldAnimateResponse = true;
         this.requestUpdate();

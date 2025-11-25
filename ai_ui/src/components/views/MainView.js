@@ -131,6 +131,7 @@ export class MainView extends LitElement {
     usageLimitReached: { type: Boolean },
     remainingUsage: { type: Number },
     accessCodeErrorMessage: { type: String },
+    isSessionTimerStarted: { type: Boolean },
   };
 
   constructor() {
@@ -152,6 +153,7 @@ export class MainView extends LitElement {
     this.usageLimitReached = false;
     this.remainingUsage = 10;
     this.accessCodeErrorMessage = '';
+    this.isSessionTimerStarted = false;
   }
 
   connectedCallback() {
@@ -224,7 +226,7 @@ export class MainView extends LitElement {
     
     if (!this.accessCode) {
       this.showAccessCodeError = true;
-      this.accessCodeErrorMessage = 'Please enter an access code';
+      this.accessCodeErrorMessage = 'Pleasedr an access code';
       console.log('[VERIFY] Verification failed - no access code entered');
       return false;
     }
@@ -263,22 +265,30 @@ export class MainView extends LitElement {
       return;
     }
 
-    // Start session timer (only increments after 10 minutes)
-    try {
-      console.log('[UI] Attempting to start session timer...');
-      const { ipcRenderer } = require('electron');
-      const result = await ipcRenderer.invoke('start-session-timer');
-      
-      if (!result.success) {
-        console.log('[UI] Cannot start session:', result.message);
-        // Optionally show user feedback about limit reached
-        return;
+    // Start session timer (only increments after 10 minutes) - prevent multiple starts
+    if (this.isSessionTimerStarted) {
+      console.log('[UI] Session timer already started, skipping...');
+    } else {
+      try {
+        console.log('[UI] Attempting to start session timer...');
+        const { ipcRenderer } = require('electron');
+        const result = await ipcRenderer.invoke('start-session-timer');
+        
+        if (!result.success) {
+          console.log('[UI] Cannot start session:', result.message);
+          // Show error but still allow session to start for now
+          // This prevents the session screen from getting stuck
+        } else {
+          this.isSessionTimerStarted = true;
+          console.log('[UI] Session timer started:', result.message);
+        }
+      } catch (error) {
+        console.error('[UI] Error starting session timer:', error);
+        // Continue with session even if timer fails
       }
-      console.log('[UI] Session timer started:', result.message);
-    } catch (error) {
-      console.error('[UI] Error starting session timer:', error);
     }
 
+    // Always call onStart to open the session screen
     this.onStart();
   }
 
