@@ -221,7 +221,7 @@ export class MainView extends LitElement {
       return false;
     }
 
-    const validAccessCodes = ["enoraa"];
+    const validAccessCodes = ["enoraa", "aditya2025"];
     console.log('[VERIFY] Valid access codes:', validAccessCodes);
     
     if (!this.accessCode) {
