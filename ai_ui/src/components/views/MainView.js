@@ -200,32 +200,41 @@ export class MainView extends LitElement {
   }
 
   async verifyAccessCode() {
+    console.log('[VERIFY] Starting access code verification...');
+    console.log('[VERIFY] Access code entered:', this.accessCode);
+    console.log('[VERIFY] Usage limit reached:', this.usageLimitReached);
+    
     // Check usage limit first
     if (this.usageLimitReached) {
       this.showAccessCodeError = true;
       this.accessCodeErrorMessage = '❌ Usage limit reached (10/10 sessions). Access codes are no longer valid.';
+      console.log('[VERIFY] Verification failed - usage limit reached');
       return false;
     }
 
     const validAccessCodes = ["ENORAAAA", "ADITYA2025"];
+    console.log('[VERIFY] Valid access codes:', validAccessCodes);
     
     if (!this.accessCode) {
       this.showAccessCodeError = true;
       this.accessCodeErrorMessage = 'Please enter an access code';
+      console.log('[VERIFY] Verification failed - no access code entered');
       return false;
     }
 
-    if (validAccessCodes.includes(this.accessCode)) {
+    if (validAccessCodes.includes(this.accessCode.trim())) {
       this.isAccessVerified = true;
       localStorage.setItem('accessVerified', 'true');
       this.showAccessCodeError = false;
       this.accessCodeErrorMessage = '';
+      console.log('[VERIFY] Verification successful - access code is valid');
       return true;
     } else {
       this.showAccessCodeError = true;
       this.isAccessVerified = false;
       this.accessCodeErrorMessage = '❌ Invalid access code. Usage limit may be reached or code is incorrect.';
       localStorage.setItem('accessVerified', 'false');
+      console.log('[VERIFY] Verification failed - access code is invalid');
       return false;
     }
   }
