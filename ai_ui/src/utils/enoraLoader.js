@@ -107,8 +107,7 @@ class EnoraLoader {
         this._lastHideTime = 0; // Reset hide time
         this._lastAnimatedWordCount = 0;
         this._lastRenderedResponse = '';
-        
-        // Force hide any existing loader
+      
         if (this.isLoading) {
             this.hide();
         }

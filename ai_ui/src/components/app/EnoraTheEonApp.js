@@ -102,7 +102,7 @@ export class EnoraTheEonApp extends LitElement {
     `;
 
     async handleRestartCapture() {
-        if (typeof cheddar.stopCapture === 'function') {
+        if (typeof cheddar !== 'undefined' && typeof cheddar.stopCapture === 'function') {
             cheddar.stopCapture();
         }
 
@@ -110,7 +110,9 @@ export class EnoraTheEonApp extends LitElement {
         const captureQuality = this.fastMode ? 'low' : this.selectedImageQuality;
 
         try {
-            await cheddar.startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
+            if (typeof cheddar !== 'undefined') {
+                await cheddar.startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
+            }
             this.captureError = null;
             this.setStatus('Capture restarted');
         } catch (error) {
@@ -127,16 +129,16 @@ export class EnoraTheEonApp extends LitElement {
         this.setStatus('Resetting capture & listening...');
 
         try {
-            if (typeof cheddar.stopCapture === 'function') {
-                cheddar.stopCapture();
+            if (typeof (typeof cheddar !== 'undefined' ? cheddar : {}).stopCapture === 'function') {
+                (typeof cheddar !== 'undefined' ? cheddar : {}).stopCapture();
             }
 
-            await cheddar.initializeGemini(this.selectedProfile, 'en-US');
+            await (typeof cheddar !== 'undefined' ? cheddar : {}).initializeGemini(this.selectedProfile, 'en-US');
 
             const captureInterval = 'manual';
             const captureQuality = 'low';
 
-            await cheddar.startCapture(captureInterval, captureQuality, { fastMode: true });
+            await (typeof cheddar !== 'undefined' ? cheddar : {}).startCapture(captureInterval, captureQuality, { fastMode: true });
 
             this.fastMode = true;
             this.selectedScreenshotInterval = 'manual';
@@ -162,7 +164,7 @@ export class EnoraTheEonApp extends LitElement {
         const captureQuality = this.fastMode ? 'low' : this.selectedImageQuality;
         this.captureError = null;
         this.requestUpdate();
-        cheddar.startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
+        (typeof cheddar !== 'undefined' ? cheddar : {}).startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
     }
 
     static properties = {
@@ -697,7 +699,7 @@ export class EnoraTheEonApp extends LitElement {
         if (this.currentView === 'customize' || this.currentView === 'help' || this.currentView === 'history') {
             this.currentView = 'main';
         } else if (this.currentView === 'assistant') {
-            cheddar.stopCapture();
+            (typeof cheddar !== 'undefined' ? cheddar : {}).stopCapture();
 
             // Close the session
             if (window.require) {
@@ -736,7 +738,7 @@ export class EnoraTheEonApp extends LitElement {
             return;
         }
 
-        if (typeof cheddar.stopCapture === 'function') {
+        if (typeof cheddar !== 'undefined' && typeof cheddar.stopCapture === 'function') {
             cheddar.stopCapture();
         }
 
@@ -744,7 +746,9 @@ export class EnoraTheEonApp extends LitElement {
             this.handleFastModeChange(true);
         }
 
-        await cheddar.initializeGemini(this.selectedProfile, 'en-US');
+        if (typeof cheddar !== 'undefined') {
+            await cheddar.initializeGemini(this.selectedProfile, 'en-US');
+        }
 
         const captureInterval = this.fastMode ? 'manual' : this.selectedScreenshotInterval;
         const captureQuality = this.fastMode ? 'low' : this.selectedImageQuality;
@@ -752,7 +756,9 @@ export class EnoraTheEonApp extends LitElement {
         this.captureError = null;
         this.requestUpdate();
 
-        cheddar.startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
+        if (typeof cheddar !== 'undefined') {
+            cheddar.startCapture(captureInterval, captureQuality, { fastMode: this.fastMode });
+        }
         this.responses = [];
         this.currentResponseIndex = -1;
         this.startTime = Date.now();

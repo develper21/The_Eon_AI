@@ -124,6 +124,12 @@ export class MainView extends LitElement {
     onLayoutModeChange: { type: Function },
     showApiKeyError: { type: Boolean },
     apiKey: { type: String },
+    accessCode: { type: String },
+    showAccessCodeError: { type: Boolean },
+    isAccessVerified: { type: Boolean },
+    usageCount: { type: Number },
+    usageLimitReached: { type: Boolean },
+    remainingUsage: { type: Number },
   };
 
   constructor() {
@@ -135,6 +141,12 @@ export class MainView extends LitElement {
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
     this.apiKey = localStorage.getItem('apiKey') || '';
+    this.accessCode = localStorage.getItem('accessCode') || '';
+    this.showAccessCodeError = false;
+    this.isAccessVerified = localStorage.getItem('accessVerified') === 'true';
+    this.usageCount = 0;
+    this.usageLimitReached = false;
+    this.remainingUsage = 10;
   }
 
   connectedCallback() {
@@ -145,6 +157,8 @@ export class MainView extends LitElement {
     document.addEventListener('keydown', this.boundKeydownHandler);
     this.loadLayoutMode?.();
     resizeLayout();
+    // Fetch usage count from main process
+    this.fetchUsageCount();
   }
 
   disconnectedCallback() {
@@ -175,12 +189,64 @@ export class MainView extends LitElement {
     if (this.showApiKeyError) this.showApiKeyError = false;
   }
 
+  handleAccessCodeInput(e) {
+    this.accessCode = e.target.value.trim();
+    localStorage.setItem('accessCode', this.accessCode);
+    if (this.showAccessCodeError) this.showAccessCodeError = false;
+  }
+
+  async verifyAccessCode() {
+    // Multiple valid access codes
+    const validAccessCodes = ["ENORA2025", "AKSHAR2025", "RIDHAM2025"]; // Multiple access codes
+    
+    if (!this.accessCode) {
+      this.showAccessCodeError = true;
+      return false;
+    }
+
+    if (validAccessCodes.includes(this.accessCode)) {
+      this.isAccessVerified = true;
+      localStorage.setItem('accessVerified', 'true');
+      this.showAccessCodeError = false;
+      return true;
+    } else {
+      this.showAccessCodeError = true;
+      this.isAccessVerified = false;
+      localStorage.setItem('accessVerified', 'false');
+      return false;
+    }
+  }
+
   async handleStartClick() {
     if (this.isInitializing) return;
+
+    // Check access code first
+    if (!this.isAccessVerified) {
+      const isVerified = await this.verifyAccessCode();
+      if (!isVerified) {
+        return;
+      }
+    }
 
     if (!this.apiKey) {
       this.showApiKeyError = true;
       return;
+    }
+
+    // Start session timer (only increments after 1 minute)
+    try {
+      console.log('[UI] Attempting to start session timer...');
+      const { ipcRenderer } = require('electron');
+      const result = await ipcRenderer.invoke('start-session-timer');
+      
+      if (!result.success) {
+        console.log('[UI] Cannot start session:', result.message);
+        // Optionally show user feedback about limit reached
+        return;
+      }
+      console.log('[UI] Session timer started:', result.message);
+    } catch (error) {
+      console.error('[UI] Error starting session timer:', error);
     }
 
     this.onStart();
@@ -188,6 +254,22 @@ export class MainView extends LitElement {
 
   handleAPIKeyHelpClick() {
     this.onAPIKeyHelp();
+  }
+
+  async fetchUsageCount() {
+    try {
+      const { ipcRenderer } = require('electron');
+      const usageInfo = await ipcRenderer.invoke('check-usage-limit');
+      this.usageCount = usageInfo.currentUsage;
+      this.usageLimitReached = usageInfo.limitReached;
+      this.remainingUsage = usageInfo.remaining;
+      console.log('Usage info fetched:', usageInfo);
+    } catch (error) {
+      console.error('Error fetching usage count:', error);
+      this.usageCount = 0;
+      this.usageLimitReached = false;
+      this.remainingUsage = 10;
+    }
   }
 
   getStartButtonText() {
@@ -202,7 +284,43 @@ export class MainView extends LitElement {
   render() {
     return html`
       <div class="welcome">Welcome</div>
+      
+      <!-- Usage Count Display with Limit -->
+      <div style="text-align: center; margin-bottom: 20px; color: #888; font-size: 14px;">
+        <div style="margin-bottom: 8px;">
+          📊 Usage Count: <strong>${this.usageCount}/10</strong> sessions
+        </div>
+        <div style="font-size: 12px; color: ${this.usageLimitReached ? '#ff4444' : '#666'};">
+          ${this.usageLimitReached 
+            ? '⚠️ Usage limit reached' 
+            : `✅ ${this.remainingUsage} sessions remaining`
+          }
+        </div>
+        <div style="font-size: 11px; color: #999; margin-top: 4px;">
+          (Counts only after 10+ minute sessions)
+        </div>
+      </div>
 
+      <!-- Access Code Input -->
+      <div class="input-group">
+        <input
+          type="password"
+          placeholder="Enter Access Code"
+          .value=${this.accessCode}
+          @input=${this.handleAccessCodeInput}
+          class="${this.showAccessCodeError ? 'api-key-error' : ''}"
+          ?disabled=${this.isAccessVerified}
+        />
+        <button
+          @click=${this.verifyAccessCode}
+          class="start-button"
+          ?disabled=${this.isAccessVerified}
+        >
+          ${this.isAccessVerified ? '✓ Verified' : 'Verify'}
+        </button>
+      </div>
+
+      <!-- API Key Input (only enabled if access code is verified) -->
       <div class="input-group">
         <input
           type="password"
@@ -210,12 +328,14 @@ export class MainView extends LitElement {
           .value=${this.apiKey}
           @input=${this.handleInput}
           class="${this.showApiKeyError ? 'api-key-error' : ''}"
+          ?disabled=${!this.isAccessVerified}
         />
         <button
           @click=${this.handleStartClick}
           class="start-button ${this.isInitializing ? 'initializing' : ''}"
+          ?disabled=${!this.isAccessVerified || this.usageLimitReached}
         >
-          ${this.getStartButtonText()}
+          ${this.usageLimitReached ? 'Limit Reached' : this.getStartButtonText()}
         </button>
       </div>
     `;
