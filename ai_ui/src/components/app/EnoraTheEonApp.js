@@ -696,25 +696,10 @@ export class EnoraTheEonApp extends LitElement {
     }
 
     async handleClose() {
-        if (this.currentView === 'customize' || this.currentView === 'help' || this.currentView === 'history') {
-            this.currentView = 'main';
-        } else if (this.currentView === 'assistant') {
-            (typeof cheddar !== 'undefined' ? cheddar : {}).stopCapture();
-
-            // Close the session
-            if (window.require) {
-                const { ipcRenderer } = window.require('electron');
-                await ipcRenderer.invoke('close-session');
-            }
-            this.sessionActive = false;
-            this.currentView = 'main';
-            console.log('Session closed');
-        } else {
-            // Quit the entire application
-            if (window.require) {
-                const { ipcRenderer } = window.require('electron');
-                await ipcRenderer.invoke('quit-application');
-            }
+        // Quit the entire application when cross button is clicked
+        if (window.require) {
+            const { ipcRenderer } = window.require('electron');
+            await ipcRenderer.invoke('quit-application');
         }
     }
 
