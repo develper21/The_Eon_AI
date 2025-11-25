@@ -233,7 +233,7 @@ export class MainView extends LitElement {
       return;
     }
 
-    // Start session timer (only increments after 1 minute)
+    // Start session timer (only increments after 10 minutes)
     try {
       console.log('[UI] Attempting to start session timer...');
       const { ipcRenderer } = require('electron');
