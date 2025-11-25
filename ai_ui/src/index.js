@@ -214,7 +214,7 @@ async function sendUsageNotificationEmail(newCount) {
                         <p><strong>✅ New Usage Count:</strong> ${newCount}/10 sessions</p>
                         <p><strong>📅 Date:</strong> ${new Date().toLocaleString()}</p>
                         <p><strong>⏱️ Session Duration:</strong> 10+ minutes (qualified)</p>
-                        <p><strong>🔑 Access Code:</strong> ENORAAAA or ADITYA2025 (verified)</p>
+                        <p><strong>🔑 Access Code:</strong> enoraa (verified)</p>
                     </div>
                     <div style="background: #e3f2fd; padding: 15px; border-radius: 8px;">
                         <h4>📊 Usage Statistics:</h4>
@@ -331,6 +331,22 @@ function getUsageCount() {
 function isUsageLimitReached() {
     const currentUsage = getUsageCount();
     return currentUsage >= MAX_USAGE_LIMIT;
+}
+
+function resetUsageCount() {
+    try {
+        const resetData = JSON.stringify({ count: 0, lastUpdated: new Date().toISOString() }, null, 2);
+        const dir = path.dirname(USAGE_FILE);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(USAGE_FILE, resetData, 'utf8');
+        console.log('[USAGE] Usage count reset to 0');
+        return { success: true };
+    } catch (error) {
+        console.error('[USAGE] Failed to reset usage count:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 async function checkVersion() {
@@ -542,6 +558,10 @@ function setupGeneralIpcHandlers() {
             currentUsage: getUsageCount(),
             remaining: Math.max(0, MAX_USAGE_LIMIT - getUsageCount())
         };
+    });
+
+    ipcMain.handle('reset-usage-count', () => {
+        return resetUsageCount();
     });
 
     ipcMain.handle('end-session-timer', (event) => {

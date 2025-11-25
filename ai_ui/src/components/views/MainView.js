@@ -221,23 +221,25 @@ export class MainView extends LitElement {
       return false;
     }
 
-    const validAccessCodes = ["ENORAAAA", "ADITYA2025"];
+    const validAccessCodes = ["enoraa"];
     console.log('[VERIFY] Valid access codes:', validAccessCodes);
     
     if (!this.accessCode) {
       this.showAccessCodeError = true;
-      this.accessCodeErrorMessage = 'Pleasedr an access code';
+      this.accessCodeErrorMessage = 'Please enter an access code';
       console.log('[VERIFY] Verification failed - no access code entered');
       return false;
     }
 
-    if (validAccessCodes.includes(this.accessCode.trim())) {
+    const normalizedCode = this.accessCode.trim().toLowerCase();
+    if (validAccessCodes.includes(normalizedCode)) {
       this.isAccessVerified = true;
       localStorage.setItem('accessVerified', 'true');
       this.showAccessCodeError = false;
       this.accessCodeErrorMessage = '';
       console.log('[VERIFY] Verification successful - access code is valid');
       console.log('[VERIFY] Sessions remaining:', 10 - this.usageCount);
+      await this.resetUsageLimit();
       return true;
     } else {
       this.showAccessCodeError = true;
