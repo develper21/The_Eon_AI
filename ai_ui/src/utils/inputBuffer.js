@@ -93,8 +93,8 @@ class InputBuffer {
                 console.log('🎤 Speech detected - starting to listen');
                 
                 // Show loader when user starts speaking
-                if (window.EnoraLoader) {
-                    window.EnoraLoader.show('Listening...', 'Speak now...');
+                if (typeof EnoraLoader !== 'undefined') {
+                    EnoraLoader.show('Listening...', 'Speak now...');
                 }
             }
         }
