@@ -514,8 +514,13 @@ export class EnoraTheEonApp extends LitElement {
         this.updatePendingQuestion(question.id, { status: 'answering', startedAt: Date.now() });
         this.setStatus('Answering interviewer…');
 
-        const prompt = this.buildQuestionPrompt(question);
+        // Force fresh context by clearing any existing responses
+        console.log('[FRESH ANSWER] Clearing existing responses for new question');
+        this.responses = [];
+        this.currentResponseIndex = 0;
         this._awaitingNewResponse = true;
+
+        const prompt = this.buildQuestionPrompt(question);
 
         try {
             const result = await window.cheddar.sendTextMessage(prompt);
@@ -613,8 +618,21 @@ export class EnoraTheEonApp extends LitElement {
                 response.toLowerCase().includes('go on') ||
                 response.toLowerCase().includes('continue'));
 
-        if (this._awaitingNewResponse || this.responses.length === 0) {
-            // Always add as new response when explicitly waiting for one
+        // Check if this is a question-answer pair (contains both Q and A)
+        const isQuestionAnswerPair = response.includes('**Q (Interviewer):**') && 
+                                   response.includes('**A (You):**');
+
+        // ALWAYS update the last response for question-answer pairs to keep them on same page
+        if (isQuestionAnswerPair && this.responses.length > 0) {
+            // Update the last response to keep Q&A together on same page
+            this.responses = [...this.responses.slice(0, this.responses.length - 1), response];
+            this.currentResponseIndex = this.responses.length - 1;
+            this._awaitingNewResponse = false;
+            this._currentResponseIsComplete = false;
+            this.clearResponseWatchdog();
+            console.log('[setResponse] Updated last response to keep Q&A on same page:', response);
+        } else if (this._awaitingNewResponse || this.responses.length === 0) {
+            // Add as new response when explicitly waiting for one or first response
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._awaitingNewResponse = false;
@@ -626,7 +644,6 @@ export class EnoraTheEonApp extends LitElement {
             console.log('[setResponse] Pushed new response:', response);
         } else if (!this._currentResponseIsComplete && !isFillerResponse && this.responses.length > 0) {
             // For substantial responses, update the last one (streaming behavior)
-            // Only update if the current response is not marked as complete
             this.responses = [...this.responses.slice(0, this.responses.length - 1), response];
             this.clearResponseWatchdog();
             console.log('[setResponse] Updated last response:', response);

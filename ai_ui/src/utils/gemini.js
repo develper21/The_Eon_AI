@@ -409,7 +409,8 @@ function initializeNewSession() {
     currentSessionId = Date.now().toString();
     currentTranscription = '';
     conversationHistory = [];
-    console.log('New conversation session started:', currentSessionId);
+    console.log('[FRESH SESSION] New conversation session started:', currentSessionId);
+    console.log('[FRESH SESSION] Previous conversation context cleared');
 }
 
 function saveConversationTurn(transcription, aiResponse) {
