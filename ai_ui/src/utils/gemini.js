@@ -989,6 +989,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         try {
             process.stdout.write('.');
             // Show loader when first audio chunk is sent (only once)
+            sendToRenderer('show-loader', 'Processing your voice...', 'AI is listening...');
             await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
@@ -1004,6 +1005,8 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write(',');
+            // Show loader when mic audio is being processed
+            sendToRenderer('show-loader', 'Processing your voice...', 'AI is listening...');
             await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
