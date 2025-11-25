@@ -57,13 +57,7 @@ const profilePrompts = {
 5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).`,
 
         outputInstructions: `**OUTPUT INSTRUCTIONS:**
-Provide TWO types of answers for each question:
-
-**QUICK ANSWER:** 
-- 2-4 plain sentences that someone could say out loud verbatim
-- Short, warm, and confident response
-- Include one vivid detail (metric, tool, story beat) so it feels real
-- No coaching phrases like "You should" — just the spoken answer
+Provide a single comprehensive answer structured in point format using bold headers.
 
 **DETAILED ANSWER:**
 - Must be structured in specific point format using bold headers
@@ -74,15 +68,9 @@ Provide TWO types of answers for each question:
   4. **Types/Details:** Different types, variations, or additional technical details
 
 **FORMAT:**
-First provide the QUICK ANSWER, then add "---" separator, then provide the DETAILED ANSWER with the 4 required sections.
+Provide the complete detailed answer with the 4 required sections.
 
 Example format:
-[Quick answer text here]
-
----
-
-**Detailed Answer:**
-
 **Definition:** [Clear explanation of the concept]
 
 **Example:** [Specific example or scenario]
