@@ -604,7 +604,7 @@ function setupLinuxMicProcessing(micStream) {
                 const pcmData16 = convertFloat32ToInt16(chunk);
                 const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-                await ipcRenderer.invoke('send-mic-audio-content', {
+                const result = await ipcRenderer.invoke('send-mic-audio-content', {
                     data: base64Data,
                     mimeType: 'audio/pcm;rate=24000',
                 });
@@ -679,7 +679,7 @@ function setupWindowsLoopbackProcessing() {
             const pcmData16 = convertFloat32ToInt16(chunk);
             const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-audio-content', {
+            const result = await ipcRenderer.invoke('send-audio-content', {
                 data: base64Data,
                 mimeType: 'audio/pcm;rate=24000',
             });
@@ -1098,6 +1098,15 @@ Format:
 **Dry Run:** (step-by-step execution with comments)`;
     
     console.log(' Sending prompt for problem', problemNum);
+    
+    // Reset loader for new question
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().resetForNewQuestion();
+    }
+    
+    // Update loader message for LeetCode
+    EnoraLoader.updateMessage('Solving LeetCode problem', `Working on Problem ${problemNum}...`);
+    
     const result = await sendTextMessage(finalPrompt);
     
     if (!result?.success) {
@@ -1240,6 +1249,15 @@ Format:
     }
     
     console.log(' Sending prompt for HackerRank problem:', problemIdentifier);
+    
+    // Reset loader for new question
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().resetForNewQuestion();
+    }
+    
+    // Update loader message for HackerRank
+    EnoraLoader.updateMessage('Solving HackerRank problem', `Working on ${problemIdentifier}...`);
+    
     const result = await sendTextMessage(finalPrompt);
     
     if (!result?.success) {
@@ -1257,6 +1275,66 @@ Format:
         });
     }
 }
+
+// Global loader lock to prevent race conditions
+let loaderLock = false;
+
+// Handle loader events from main process
+ipcRenderer.on('show-loader', (event, message, subtext) => {
+    // Prevent multiple rapid loader calls
+    if (loaderLock) {
+        console.log('🚫 Loader show blocked by lock');
+        return;
+    }
+    
+    loaderLock = true;
+    setTimeout(() => { loaderLock = false; }, 500); // Release lock after 500ms
+    
+    console.log('📥 Received show-loader event:', message);
+    EnoraLoader.show(message, subtext);
+});
+
+ipcRenderer.on('hide-loader', (event) => {
+    console.log('📥 Received hide-loader event');
+    EnoraLoader.hide();
+    
+    // Ensure UI remains responsive by resetting any stuck states
+    setTimeout(() => {
+        // Force hide loader if it's still visible
+        if (window.EnoraLoader && window.EnoraLoader.getInstance().isLoading) {
+            window.EnoraLoader.hide();
+        }
+        
+        // Reset any potential UI blocking
+        document.body.style.pointerEvents = '';
+        document.body.style.userSelect = '';
+    }, 100);
+});
+
+// Emergency stop handler - completely disables loader during response
+ipcRenderer.on('emergency-stop-loader', (event) => {
+    console.log('🚨 Received emergency-stop-loader event - COMPLETELY DISABLING LOADER');
+    if (window.EnoraLoader) {
+        window.EnoraLoader.getInstance().emergencyStop();
+    }
+});
+
+// Global UI unblocker - runs every 2 seconds to ensure UI never gets stuck
+setInterval(() => {
+    // Always ensure UI is interactive
+    document.body.style.pointerEvents = '';
+    document.body.style.userSelect = '';
+    
+    // Force hide any stuck loader
+    if (window.EnoraLoader && window.EnoraLoader.getInstance().isLoading) {
+        // If loader has been visible for more than 5 seconds, emergency stop
+        const loaderInstance = window.EnoraLoader.getInstance();
+        if (loaderInstance._showTime && (Date.now() - loaderInstance._showTime) > 5000) {
+            console.log('🚨 Loader stuck for 5+ seconds - EMERGENCY STOP');
+            loaderInstance.emergencyStop();
+        }
+    }
+}, 2000);
 
 // Expose functions to global scope for external access
 window.captureManualScreenshot = captureManualScreenshot;
@@ -1315,6 +1393,11 @@ async function sendTextMessage(text) {
     }
 
     try {
+        // Reset loader for new question
+        if (window.EnoraLoader) {
+            window.EnoraLoader.getInstance().resetForNewQuestion();
+        }
+        
         const result = await ipcRenderer.invoke('send-text-message', text);
         if (result.success) {
             console.log('Text message sent successfully');

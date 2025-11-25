@@ -688,6 +688,10 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
+                        // IMMEDIATELY hide loader and send a STRONG signal to prevent any re-showing
+                        sendToRenderer('hide-loader');
+                        sendToRenderer('emergency-stop-loader');
+                        
                         for (const part of message.serverContent.modelTurn.parts) {
                             console.log(part);
                             if (part.text) {
@@ -973,6 +977,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
             process.stdout.write('.');
+            // Show loader when first audio chunk is sent (only once)
             await geminiSessionRef.current.sendRealtimeInput({
                 audio: { data: data, mimeType: mimeType },
             });
@@ -1035,6 +1040,8 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             }
 
             console.log('Sending text message:', text);
+            // Show loader ONLY when text message is sent (before any response)
+            sendToRenderer('show-loader', 'Processing request', 'AI is thinking...');
             await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
             return { success: true };
         } catch (error) {
