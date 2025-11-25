@@ -84,7 +84,6 @@ function createMainWindow() {
 // Usage counter functions
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
 
 // Use app data directory for reliable file storage in deployed environment
 const userDataPath = app ? app.getPath('userData') : path.join(__dirname, '..');;
