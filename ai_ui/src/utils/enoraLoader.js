@@ -4,13 +4,16 @@ class EnoraLoader {
         this.isLoading = false;
         this.loadingElement = null;
         this.overlayElement = null;
-        this.currentStep = 'processing';
-        this.loadingSteps = ['processing', 'analyzing', 'generating'];
+        this.currentStep = 'listening';
+        this.loadingSteps = ['listening', 'processing'];
         this.stepIndex = 0;
         this.stepInterval = null;
         this.hideTimeout = null;
         this.responseStarted = false; // Track if response has started
         this.globalBlock = false; // Global block to prevent any loader during response
+        this.dotAnimationInterval = null;
+        this.dotDirection = 1; // 1 for forward (1-2-3), -1 for backward (3-2-1)
+        this.currentDotCount = 1;
     }
 
     init() {
@@ -28,7 +31,7 @@ class EnoraLoader {
         }
     }
 
-    show(message = 'Processing your request', subtext = 'AI is thinking...') {
+    show(message = 'Listening...', subtext = 'Speak now...') {
         // AGGRESSIVE BLOCKING - Don't show loader if ANY blocking condition is met
         if (this.responseStarted || this.globalBlock) {
             console.log('🚫🚫 LOADER BLOCKED - response in progress');
@@ -57,6 +60,7 @@ class EnoraLoader {
             // Create new loader
             this.createLoadingElements(message, subtext);
             this.startStepAnimation();
+            this.startDotAnimation();
         }
         
         console.log('✅ Loader shown:', message);
@@ -80,6 +84,7 @@ class EnoraLoader {
         this.hideTimeout = setTimeout(() => {
             this.isLoading = false;
             this.stopStepAnimation();
+            this.stopDotAnimation();
             this.removeLoadingElements();
             this.hideTimeout = null;
             console.log('✅ Loader hidden - ALL BLOCKS ACTIVE');
@@ -107,6 +112,10 @@ class EnoraLoader {
         this._lastHideTime = 0; // Reset hide time
         this._lastAnimatedWordCount = 0;
         this._lastRenderedResponse = '';
+        this.currentStep = 'listening';
+        this.stepIndex = 0;
+        this.dotDirection = 1;
+        this.currentDotCount = 1;
       
         if (this.isLoading) {
             this.hide();
@@ -122,6 +131,7 @@ class EnoraLoader {
         if (this.isLoading) {
             this.isLoading = false;
             this.stopStepAnimation();
+            this.stopDotAnimation();
             this.removeLoadingElements();
         }
         
@@ -206,6 +216,53 @@ class EnoraLoader {
         }, 2000);
     }
 
+    startDotAnimation() {
+        this.stopDotAnimation(); // Clear any existing animation
+        
+        this.dotAnimationInterval = setInterval(() => {
+            this.updateDotCount();
+        }, 400); // Change dots every 400ms
+    }
+
+    stopDotAnimation() {
+        if (this.dotAnimationInterval) {
+            clearInterval(this.dotAnimationInterval);
+            this.dotAnimationInterval = null;
+        }
+    }
+
+    updateDotCount() {
+        const dots = document.querySelectorAll('.enora-dot');
+        
+        // Update direction and count
+        if (this.dotDirection === 1) {
+            // Forward: 1 -> 2 -> 3
+            this.currentDotCount++;
+            if (this.currentDotCount >= 3) {
+                this.currentDotCount = 3;
+                this.dotDirection = -1; // Switch to backward
+            }
+        } else {
+            // Backward: 3 -> 2 -> 1
+            this.currentDotCount--;
+            if (this.currentDotCount <= 1) {
+                this.currentDotCount = 1;
+                this.dotDirection = 1; // Switch to forward
+            }
+        }
+        
+        // Update dot visibility
+        dots.forEach((dot, index) => {
+            if (index < this.currentDotCount) {
+                dot.style.opacity = '1';
+                dot.style.transform = 'scale(1.2)';
+            } else {
+                dot.style.opacity = '0.3';
+                dot.style.transform = 'scale(0.8)';
+            }
+        });
+    }
+
     stopStepAnimation() {
         if (this.stepInterval) {
             clearInterval(this.stepInterval);
@@ -218,25 +275,31 @@ class EnoraLoader {
         
         if (this.loadingElement) {
             // Remove all step classes
-            this.loadingElement.classList.remove('processing', 'analyzing', 'generating');
+            this.loadingElement.classList.remove('listening', 'processing');
             // Add current step class
             this.loadingElement.classList.add(this.currentStep);
             
             // Update message based on step
             const messages = {
-                'processing': 'Processing your request',
-                'analyzing': 'Analyzing the problem',
-                'generating': 'Generating solution'
+                'listening': 'Listening...',
+                'processing': 'Processing the answer...'
             };
             
             const subtexts = {
-                'processing': 'AI is preparing...',
-                'analyzing': 'Understanding requirements...',
-                'generating': 'Creating optimal solution...'
+                'listening': 'Speak now...',
+                'processing': 'AI is generating response...'
             };
             
             this.updateMessage(messages[this.currentStep], subtexts[this.currentStep]);
         }
+    }
+
+    // New method to switch to processing mode when response starts
+    switchToProcessing() {
+        this.currentStep = 'processing';
+        this.stepIndex = 1;
+        this.updateStep();
+        console.log('🔄 Switched to processing mode');
     }
 
     // Static methods for easy access
@@ -258,6 +321,10 @@ class EnoraLoader {
 
     static updateMessage(message, subtext) {
         EnoraLoader.getInstance().updateMessage(message, subtext);
+    }
+
+    static switchToProcessing() {
+        EnoraLoader.getInstance().switchToProcessing();
     }
 }
 
