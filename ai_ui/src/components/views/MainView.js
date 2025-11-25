@@ -205,7 +205,7 @@ export class MainView extends LitElement {
       return false;
     }
 
-    const validAccessCodes = ["ENORA2025", "AKSHAR2025", "ADITYA2025"];
+    const validAccessCodes = ["ENORAAAA", "ADITYA2025"];
     
     if (!this.accessCode) {
       this.showAccessCodeError = true;
