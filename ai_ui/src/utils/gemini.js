@@ -17,7 +17,7 @@ const AUTO_REFRESH_TURN_LIMIT = 6;
 
 const CONNECTION_CONSTANTS = {
     pingInterval: 60000,
-    pongTimeout: 30000,
+    pongTimeout: 30000, // Standard 30 second timeout
     sustainedFailureThreshold: 6,
     initialReconnectDelay: 1000,
     backoffMultiplier: 2,
@@ -542,8 +542,8 @@ async function refreshLiveSession(reason = 'manual') {
 async function getEnabledTools() {
     const tools = [];
 
-    // Check if Google Search is enabled (default: true)
-    const googleSearchEnabled = await getStoredSetting('googleSearchEnabled', 'true');
+    // Check if Google Search is enabled (default: false - disabled to prevent errors)
+    const googleSearchEnabled = await getStoredSetting('googleSearchEnabled', 'false');
     console.log('Google Search enabled:', googleSearchEnabled);
 
     if (googleSearchEnabled === 'true') {

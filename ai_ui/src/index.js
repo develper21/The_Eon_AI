@@ -89,7 +89,7 @@ const USAGE_FILE = path.join(__dirname, '..', 'usage-count.json');
 const SETTINGS_FILE = path.join(__dirname, '..', 'usage-settings.json');
 
 // Default settings
-let SESSION_DURATION_LIMIT = 10 * 60 * 1000; // 10 minutes
+let SESSION_DURATION_LIMIT = 10 * 60 * 1000; // 10 minutes (usage increments only after 10 min)
 let MAX_USAGE_LIMIT = 10;
 
 let sessionStartTime = null;
