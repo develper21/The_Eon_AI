@@ -410,16 +410,18 @@ function sendToRenderer(channel, data) {
 }
 
 // Conversation management functions
-function initializeNewSession() {
+function initializeNewSession(clearBuffers = true) {
     currentSessionId = Date.now().toString();
     currentTranscription = '';
     conversationHistory = [];
     
-    // CRITICAL FIX: Clear all question buffers when starting new session
-    activeQuestionId = null;
-    questionBuffers.clear();
+    // CRITICAL FIX: Clear all question buffers when starting new session (unless explicitly prevented)
+    if (clearBuffers) {
+        activeQuestionId = null;
+        questionBuffers.clear();
+        console.log('[BUFFER CLEAR] All question buffers cleared');
+    }
     console.log('New conversation session started:', currentSessionId);
-    console.log('[BUFFER CLEAR] All question buffers cleared');
 }
 
 function saveConversationTurn(transcription, aiResponse) {
@@ -670,13 +672,13 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
     // Initialize new conversation session (only if not reconnecting)
     if (!isReconnection) {
-        initializeNewSession();
+        initializeNewSession(true); // Clear buffers for new connections
     }
 
     try {
         let session;
         session = await client.live.connect({
-            model: 'gemini-live-2.5-flash-preview',
+            model: 'gemini-2.0-flash-exp',
             callbacks: {
                 onopen: () => {
                     sendToRenderer('update-status', 'Live session connected');
@@ -742,6 +744,7 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                                         console.log('[BUFFER ISOLATION] No active question buffer - skipping chunk');
                                         console.log('[BUFFER ISOLATION] Active question ID:', activeQuestionId);
                                         console.log('[BUFFER ISOLATION] Available buffers:', Array.from(questionBuffers.keys()));
+                                        console.log('[BUFFER ISOLATION] Chunk content preview:', part.text.substring(0, 50) + '...');
                                     }
                                 }
                             }
@@ -766,26 +769,9 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                             }
                             
 
-                            // DELAYED CLEANUP: Wait a bit before clearing buffers to catch any late chunks
-                            setTimeout(() => {
-                                // Clean up the buffer for this question
-                                questionBuffers.delete(activeQuestionId);
-                                console.log('[BUFFER CLEANUP] Removed buffer for question:', activeQuestionId);
-                                activeQuestionId = null; // Clear active question
-
-                                sendToRenderer('reset-chat', {
-                                    reason: 'generationComplete',
-                                    timestamp: Date.now(),
-                                    sessionId: currentSessionId,
-                                });
-                                // Do NOT reinitialize the session here; new questions will perform their own nuclear reset
-                                messageBuffer = '';
-                                turnsSinceRefresh += 1;
-                                if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
-                                    console.log('[AUTO-REFRESH] Turn limit reached, refreshing session');
-                                    refreshLiveSession('auto-turn-limit');
-                                }
-                            }, 2000); // Wait 2 seconds before cleanup
+                            // CRITICAL FIX: Don't clear buffers immediately - wait for turnComplete signal
+                            console.log('[GENERATION COMPLETE] Buffer will remain active until turnComplete');
+                            // Buffer cleanup will happen in turnComplete handler to catch all late chunks
                         } else {
                             console.log('[FINAL] No active question buffer - discarding response');
                             console.log('[FINAL] Active question ID:', activeQuestionId);
@@ -795,6 +781,32 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     if (message.serverContent?.turnComplete) {
                         sendToRenderer('update-status', 'Listening...');
+                        
+                        // CRITICAL FIX: Delay cleanup to catch any remaining chunks after turnComplete
+                        setTimeout(() => {
+                            if (activeQuestionId && questionBuffers.has(activeQuestionId)) {
+                                console.log('[TURN COMPLETE] Cleaning up buffer for question:', activeQuestionId);
+                                
+                                // Clean up the buffer for this question
+                                questionBuffers.delete(activeQuestionId);
+                                console.log('[BUFFER CLEANUP] Removed buffer for question:', activeQuestionId);
+                                activeQuestionId = null; // Clear active question
+
+                                sendToRenderer('reset-chat', {
+                                    reason: 'turnComplete',
+                                    timestamp: Date.now(),
+                                    sessionId: currentSessionId,
+                                });
+                                messageBuffer = '';
+                                turnsSinceRefresh += 1;
+                                if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
+                                    console.log('[AUTO-REFRESH] Turn limit reached, refreshing session');
+                                    refreshLiveSession('auto-turn-limit');
+                                }
+                            } else {
+                                console.log('[TURN COMPLETE] No active buffer to cleanup');
+                            }
+                        }, 3000); // Wait 3 seconds after turnComplete to catch remaining chunks
                     }
                 },
                 onerror: function (e) {
@@ -1115,13 +1127,14 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
             console.log('[NUCLEAR RESET] Clearing conversation history:', conversationHistory.length, 'items');
             console.log('[NUCLEAR RESET] Clearing transcription:', currentTranscription.length, 'chars');
             
-            // Reset everything to pristine state
+            // Reset everything to pristine state (but don't clear question buffers)
             currentSessionId = Date.now().toString();
             currentTranscription = '';
             conversationHistory = [];
             
             console.log('[NUCLEAR RESET] All memory wiped - starting fresh');
             console.log('[NUCLEAR RESET] AI will have ZERO previous context');
+            console.log('[NUCLEAR RESET] Preserving question buffers for current response');
             
             // Send system reset message first to ensure AI memory is cleared
             const resetMessage = "**SYSTEM: CONTEXT RESET. This is a completely new conversation. Ignore all previous messages. Start fresh. Do NOT continue from previous answers.**";
