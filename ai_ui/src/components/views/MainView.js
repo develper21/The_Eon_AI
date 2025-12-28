@@ -142,7 +142,10 @@ export class MainView extends LitElement {
     this.onLayoutModeChange = () => {};
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
-    this.apiKey = localStorage.getItem('apiKey') || 'AIzaSyBkY7s3xhQ2w9zL1mN4oP5qR6sT7uV8wX9';
+    // Clear old API key and set new one
+    localStorage.removeItem('apiKey');
+    this.apiKey = 'AIzaSyBB_4ko8KRZeGO-XYxAmlVDAoj7zJSvAws';
+    localStorage.setItem('apiKey', this.apiKey);
     // Clear access code and verification state on every app start
     localStorage.removeItem('accessCode');
     localStorage.removeItem('accessVerified');
@@ -376,7 +379,7 @@ export class MainView extends LitElement {
           .value=${this.apiKey}
           @input=${this.handleInput}
           class="${this.showApiKeyError ? 'api-key-error' : ''}"
-          ?disabled=${!this.isAccessVerified || this.usageLimitReached}
+          ?disabled=${this.usageLimitReached}
         />
         <button
           @click=${this.handleStartClick}
