@@ -293,7 +293,7 @@ function incrementUsageCount() {
         fs.writeFileSync(USAGE_FILE, newUsageData, 'utf8');
         
         console.log(`[INCREMENT] Usage count incremented to ${usageCount}/${MAX_USAGE_LIMIT}`);
-        console.log(`[INCREMENT] File saved successfully to: ${USAGE_FILE}`);
+        console.log(`[INCREMENT] File saved successfully to: ${USAGE_FILE}`);   
         console.log(`[INCREMENT] Sending email notification to deep.goyani.enora@gmail.com`);
         
         // Verify file was written correctly
