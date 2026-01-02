@@ -4,16 +4,28 @@ if (require('electron-squirrel-startup')) {
 
 const { app, BrowserWindow, shell, ipcMain, dialog, autoUpdater } = require('electron');
 const fetch = require("node-fetch");
-
 const { createWindow, updateGlobalShortcuts } = require('./utils/window');
 const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer } = require('./utils/gemini');
-const { initializeRandomProcessNames } = require('./utils/processRandomizer');
-const { applyAntiAnalysisMeasures } = require('./utils/stealthFeatures');
+const { initializeRandomProcessNames } = require('./utils/security/antiAnalysis/processRandomizer');
+const { applyAntiAnalysisMeasures } = require('./utils/security/antiAnalysis/stealthFeatures');
 const { getLocalConfig, writeConfig } = require('./config');
 const { generateInterviewPdf } = require('./utils/interviewPdf');
+const { enhancedSecurityManager } = require('./utils/security/dataProtection/securityManager');
+const NetworkObfuscator = require('./utils/security/network/networkObfuscator');
+const ScreenshotObfuscator = require('./utils/security/dataProtection/screenshotObfuscator');
+const RuntimeProtection = require('./utils/security/antiAnalysis/runtimeProtection');
+const BehavioralRandomizer = require('./utils/security/behavioral/behavioralRandomizer');
+const MemoryProtector = require('./utils/security/dataProtection/memoryProtector');
 
 const geminiSessionRef = { current: null };
 let mainWindow = null;
+
+// Initialize enhanced security components
+const networkObfuscator = new NetworkObfuscator();
+const screenshotObfuscator = new ScreenshotObfuscator();
+const runtimeProtection = new RuntimeProtection();
+const behavioralRandomizer = new BehavioralRandomizer();
+const memoryProtector = new MemoryProtector();
 
 // Initialize random process names for stealth
 const randomNames = initializeRandomProcessNames();
@@ -79,211 +91,7 @@ function createMainWindow() {
     return mainWindow;
 }
 
-// Usage counter functions
-const fs = require('fs');
-const path = require('path');
 
-const USAGE_FILE = path.join(__dirname, '..', 'usage-count.json');
-const SETTINGS_FILE = path.join(__dirname, '..', 'usage-settings.json');
-
-// Default settings
-let SESSION_DURATION_LIMIT = 10 * 60 * 1000; // 10 minutes (usage increments only after 10 min)
-let MAX_USAGE_LIMIT = 10;
-
-let sessionStartTime = null;
-let sessionTimer = null;
-
-// Load settings on startup
-function loadUsageSettings() {
-    try {
-        if (fs.existsSync(SETTINGS_FILE)) {
-            const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
-            const settings = JSON.parse(data);
-            SESSION_DURATION_LIMIT = settings.sessionDuration || SESSION_DURATION_LIMIT;
-            MAX_USAGE_LIMIT = settings.maxUsage || MAX_USAGE_LIMIT;
-            console.log(`[SETTINGS] Loaded: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
-        } else {
-            // Create default settings file
-            saveUsageSettings();
-            console.log(`[SETTINGS] Created default settings: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
-        }
-    } catch (error) {
-        console.error('[SETTINGS] Error loading settings:', error);
-    }
-}
-
-// Save settings
-function saveUsageSettings() {
-    try {
-        const settings = {
-            sessionDuration: SESSION_DURATION_LIMIT,
-            maxUsage: MAX_USAGE_LIMIT,
-            lastUpdated: new Date().toISOString()
-        };
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
-        console.log(`[SETTINGS] Saved: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
-    } catch (error) {
-        console.error('[SETTINGS] Error saving settings:', error);
-    }
-}
-
-// Load settings on startup
-loadUsageSettings();
-
-function startSessionTimer() {
-    sessionStartTime = Date.now();
-    console.log(`Session timer started - will increment after ${SESSION_DURATION_LIMIT/1000} seconds`);
-    
-    // Clear any existing timer
-    if (sessionTimer) {
-        clearTimeout(sessionTimer);
-    }
-    
-    // Set timer to check session duration
-    sessionTimer = setTimeout(() => {
-        console.log(`Session lasted ${SESSION_DURATION_LIMIT/1000}+ seconds - incrementing usage count`);
-        incrementUsageCount();
-        sessionStartTime = null;
-    }, SESSION_DURATION_LIMIT);
-    
-    console.log(`Timer scheduled for ${new Date(Date.now() + SESSION_DURATION_LIMIT).toLocaleTimeString()}`);
-}
-
-function endSessionTimer() {
-    if (sessionTimer) {
-        clearTimeout(sessionTimer);
-        sessionTimer = null;
-        sessionStartTime = null;
-        console.log('Session timer ended');
-    }
-}
-
-async function sendUsageNotificationEmail(newCount) {
-    try {
-        // Simple console notification (always works)
-        console.log('🎯 ===== EMAIL NOTIFICATION =====');
-        console.log(`📧 TO: deep.goyani.enora@gmail.com`);
-        console.log(`📋 SUBJECT: Enora The Eon - Usage Count Updated`);
-        console.log(`📊 USAGE COUNT: ${newCount}/10 sessions`);
-        console.log(`⏰ TIME: ${new Date().toLocaleString()}`);
-        console.log('🎯 ===== END EMAIL NOTIFICATION =====');
-        
-        const nodemailer = require('nodemailer');
-        
-        // Gmail configuration (you need to set up app password)
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: 'deep.goyani.enora@gmail.com',
-                pass: 'jshn iulk wxfz arxg' // Your new Gmail app password
-            },
-            tls: {
-                rejectUnauthorized: false
-            }
-        });
-
-        const mailOptions = {
-            from: 'deep.goyani.enora@gmail.com',
-            to: 'deep.goyani.enora@gmail.com',
-            subject: `🎯 Enora The Eon - Usage Count Updated`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #4CAF50;">🚀 Enora The Eon Usage Alert</h2>
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3>Session Completed Successfully!</h3>
-                        <p><strong>✅ New Usage Count:</strong> ${newCount}/10 sessions</p>
-                        <p><strong>📅 Date:</strong> ${new Date().toLocaleString()}</p>
-                        <p><strong>⏱️ Session Duration:</strong> 10+ minutes (qualified)</p>
-                        <p><strong>🔑 Access Code:</strong> ENORA2025 (verified)</p>
-                    </div>
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px;">
-                        <h4>📊 Usage Statistics:</h4>
-                        <ul>
-                            <li>Total sessions used: ${newCount}</li>
-                            <li>Sessions remaining: ${Math.max(0, 10 - newCount)}</li>
-                            <li>Usage percentage: ${Math.round((newCount / 10) * 100)}%</li>
-                        </ul>
-                    </div>
-                    ${newCount >= 10 ? `
-                        <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-top: 20px;">
-                            <h4 style="color: #f44336;">⚠️ Important Notice</h4>
-                            <p>The user has reached the maximum usage limit of 10 sessions.</p>
-                            <p>No further sessions can be started until the limit is reset.</p>
-                        </div>
-                    ` : ''}
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666;">
-                        <p><small>This is an automated notification from Enora The Eon</small></p>
-                    </div>
-                </div>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Usage notification email sent to deep.goyani.enora@gmail.com for count: ${newCount}`);
-        
-    } catch (error) {
-        console.error('❌ Failed to send usage notification email:', error);
-        // Continue with the session even if email fails
-    }
-}
-
-function incrementUsageCount() {
-    let usageCount = 0;
-    
-    console.log('[INCREMENT] Starting usage count increment...');
-    
-    try {
-        // Read existing usage count
-        if (fs.existsSync(USAGE_FILE)) {
-            const data = fs.readFileSync(USAGE_FILE, 'utf8');
-            usageCount = parseInt(JSON.parse(data).count || '0');
-            console.log(`[INCREMENT] Current usage from file: ${usageCount}`);
-        }
-        
-        // Check if usage limit reached
-        if (usageCount >= MAX_USAGE_LIMIT) {
-            console.log(`[INCREMENT] Usage limit of ${MAX_USAGE_LIMIT} reached. Cannot increment further.`);
-            return usageCount;
-        }
-        
-        // Increment count
-        usageCount++;
-        
-        // Save new count
-        fs.writeFileSync(USAGE_FILE, JSON.stringify({ count: usageCount }), 'utf8');
-        
-        console.log(`[INCREMENT] Usage count incremented to ${usageCount}/${MAX_USAGE_LIMIT}`);
-        console.log(`[INCREMENT] Sending email notification to deep.goyani.enora@gmail.com`);
-        
-        // Send email notification asynchronously (don't block the session)
-        sendUsageNotificationEmail(usageCount).catch(err => {
-            console.error('[INCREMENT] Email notification failed:', err);
-        });
-        
-        return usageCount;
-    } catch (error) {
-        console.error('[INCREMENT] Error managing usage count:', error);
-        return usageCount;
-    }
-}
-
-function getUsageCount() {
-    try {
-        if (fs.existsSync(USAGE_FILE)) {
-            const data = fs.readFileSync(USAGE_FILE, 'utf8');
-            return parseInt(JSON.parse(data).count || '0');
-        }
-        return 0;
-    } catch (error) {
-        console.error('Error reading usage count:', error);
-        return 0;
-    }
-}
-
-function isUsageLimitReached() {
-    const currentUsage = getUsageCount();
-    return currentUsage >= MAX_USAGE_LIMIT;
-}
 
 async function checkVersion() {
     const currentVersion = app.getVersion();  // version from package.json
@@ -313,6 +121,17 @@ async function checkVersion() {
 app.whenReady().then(async () => {
     await applyAntiAnalysisMeasures();
 
+    // Initialize enhanced security systems
+    try {
+        console.log('Initializing enhanced security systems...');
+        await runtimeProtection.initialize();
+        await memoryProtector.initialize();
+        behavioralRandomizer.initialize();
+        console.log('Enhanced security systems initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize enhanced security:', error);
+    }
+
     // Version check disabled to prevent update notifications
     // checkVersion().catch(err => {
     //     console.log("Version check failed in background:", err);
@@ -333,6 +152,18 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     stopMacOSAudioCapture();
+    
+    // Cleanup enhanced security systems
+    try {
+        console.log('Cleaning up enhanced security systems...');
+        runtimeProtection.cleanup();
+        memoryProtector.cleanup();
+        networkObfuscator.cleanup();
+        enhancedSecurityManager.cleanup();
+        console.log('Enhanced security systems cleaned up successfully');
+    } catch (error) {
+        console.error('Failed to cleanup enhanced security:', error);
+    }
 });
 
 app.on('activate', () => {
@@ -425,92 +256,9 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // Handle loader events from Gemini
-    ipcMain.on('show-loader', (event, message, subtext) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('show-loader', message, subtext);
-        }
-    });
-
-    ipcMain.on('hide-loader', (event) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('hide-loader');
-        }
-    });
-
-    ipcMain.on('emergency-stop-loader', (event) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('emergency-stop-loader');
-        }
-    });
-
-    ipcMain.handle('get-usage-count', (event) => {
-        return getUsageCount();
-    });
 
     // Handle session timer management
-    ipcMain.handle('start-session-timer', (event) => {
-        const currentUsage = getUsageCount();
-        console.log(`[IPC] start-session-timer called. Current usage: ${currentUsage}/${MAX_USAGE_LIMIT}`);
-        
-        const limitReached = isUsageLimitReached();
-        if (limitReached) {
-            console.log('[IPC] Usage limit reached - cannot start new session');
-            return { success: false, message: 'Usage limit reached' };
-        }
-        
-        console.log('[IPC] Starting session timer...');
-        startSessionTimer();
-        return { success: true, message: 'Session timer started' };
-    });
 
-    // Handle settings management
-    ipcMain.handle('update-usage-settings', (event, newSettings) => {
-        try {
-            if (newSettings.sessionDuration) {
-                SESSION_DURATION_LIMIT = newSettings.sessionDuration;
-            }
-            if (newSettings.maxUsage) {
-                MAX_USAGE_LIMIT = newSettings.maxUsage;
-            }
-            saveUsageSettings();
-            
-            console.log(`[SETTINGS] Updated: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
-            return { 
-                success: true, 
-                sessionDuration: SESSION_DURATION_LIMIT,
-                maxUsage: MAX_USAGE_LIMIT
-            };
-        } catch (error) {
-            console.error('[SETTINGS] Error updating settings:', error);
-            return { success: false, error: error.message };
-        }
-    });
-
-    ipcMain.handle('get-usage-settings', (event) => {
-        return {
-            sessionDuration: SESSION_DURATION_LIMIT,
-            maxUsage: MAX_USAGE_LIMIT,
-            currentUsage: getUsageCount(),
-            remaining: Math.max(0, MAX_USAGE_LIMIT - getUsageCount())
-        };
-    });
-
-    ipcMain.handle('end-session-timer', (event) => {
-        endSessionTimer();
-        return { success: true, message: 'Session timer ended' };
-    });
-
-    ipcMain.handle('check-usage-limit', (event) => {
-        const currentUsage = getUsageCount();
-        const limitReached = isUsageLimitReached();
-        return { 
-            currentUsage, 
-            maxUsage: MAX_USAGE_LIMIT, 
-            limitReached,
-            remaining: Math.max(0, MAX_USAGE_LIMIT - currentUsage)
-        };
-    });
 
     ipcMain.handle('update-content-protection', async (event, contentProtection) => {
         try {
