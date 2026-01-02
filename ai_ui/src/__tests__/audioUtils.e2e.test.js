@@ -8,7 +8,7 @@ describe('audioUtils e2e', () => {
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audio-e2e-'));
         const origHome = vi.spyOn(require('os'), 'homedir').mockReturnValue(tmpDir);
 
-        const samples = new Int16Array(16000).fill(1000); // 1s constant tone
+        const samples = new Int16Array(16000).fill(1000);
         const buffer = Buffer.from(samples.buffer);
         const outWav = path.join(tmpDir, 'test.wav');
 
