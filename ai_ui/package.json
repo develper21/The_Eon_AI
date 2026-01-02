@@ -1,7 +1,7 @@
 {
   "name": "enora-the-eon",
   "productName": "Enora-the eon",
-  "version": "1.1.6",
+  "version": "1.1.8",
   "description": "Enora-the eon is your AI assistant that listens and watches, then provides intelligent suggestions automatically during interviews and meetings.",
   "main": "src/index.js",
   "scripts": {
@@ -30,6 +30,7 @@
     "highlight.js": "^11.9.0",
     "node-fetch": "^2.6.12",
     "nodemailer": "^7.0.10",
+    "sharp": "^0.34.5",
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
