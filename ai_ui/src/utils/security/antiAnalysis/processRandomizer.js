@@ -1,6 +1,7 @@
 // processRandomizer.js - Apply random process names at startup
 
 const { getCurrentRandomName, getCurrentRandomDisplayName, generateRandomWindowTitle } = require('./processNames');
+const { obfuscateLinuxProcess } = require('./linuxStealth');
 
 /**
  * Initialize random process names for the current session
@@ -19,6 +20,13 @@ function initializeRandomProcessNames() {
 
     // Set process title to appear as a different process in task manager
     setRandomProcessTitle();
+    
+    // Apply Linux-specific process obfuscation
+    if (process.platform === 'linux') {
+        obfuscateLinuxProcess().catch(error => {
+            console.debug('Linux process obfuscation not fully applied:', error.message);
+        });
+    }
 
     return {
         processName: randomName,

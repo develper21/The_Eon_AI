@@ -33,6 +33,27 @@ const prefixes = [
     'Remote',
     'Connection',
     'Stream',
+    // Linux-specific prefixes
+    'systemd',
+    'kde',
+    'gnome',
+    'pulse',
+    'bluetooth',
+    'network',
+    'usb',
+    'kernel',
+    'dbus',
+    'cron',
+    'log',
+    'cache',
+    'config',
+    'auth',
+    'input',
+    'display',
+    'sound',
+    'video',
+    'printer',
+    'scanner',
 ];
 
 const suffixes = [
@@ -65,6 +86,17 @@ const suffixes = [
     'Cleaner',
     'Scanner',
     'Analyzer',
+    // Linux-specific suffixes
+    'd',
+    'ctl',
+    'bin',
+    'conf',
+    'init',
+    'exec',
+    'core',
+    'mod',
+    'sys',
+    'util',
 ];
 
 const extensions = [
@@ -104,6 +136,17 @@ const companies = [
     'Epson',
     'Realtek',
     'Qualcomm',
+    // Linux-specific companies/organizations
+    'Canonical',
+    'Red Hat',
+    'SUSE',
+    'Debian',
+    'Fedora',
+    'Ubuntu',
+    'KDE',
+    'GNOME',
+    'XFCE',
+    'Linux Foundation',
 ];
 
 let currentRandomName = null;
@@ -199,6 +242,17 @@ function generateRandomWindowTitle() {
         'Network Connections',
         'Audio Devices',
         'Display Settings',
+        // Linux-specific titles
+        'System Monitor',
+        'Process Viewer',
+        'Terminal',
+        'File Manager',
+        'System Logs',
+        'Network Configuration',
+        'Service Manager',
+        'Package Manager',
+        'Disk Usage Analyzer',
+        'System Profiler',
     ];
 
     return titles[Math.floor(Math.random() * titles.length)];

@@ -2,12 +2,12 @@ const { BrowserWindow, globalShortcut, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('os');
-const { applyStealthMeasures, startTitleRandomization } = require('./stealthFeatures');
+const { applyStealthMeasures, startTitleRandomization } = require('./security/antiAnalysis/stealthFeatures');
 
 let mouseEventsIgnored = false;
 let windowResizing = false;
 let resizeAnimation = null;
-const RESIZE_ANIMATION_DURATION = 500; // milliseconds
+const RESIZE_ANIMATION_DURATION = 500;
 
 function ensureDataDirectories() {
     const homeDir = os.homedir();
@@ -40,6 +40,8 @@ function createWindow(sendToRenderer, geminiSessionRef, randomNames = null) {
         alwaysOnTop: true,
         skipTaskbar: true,
         hiddenInMissionControl: true,
+        // Linux-specific properties
+        type: process.platform === 'linux' ? 'utility' : undefined,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -70,6 +72,14 @@ function createWindow(sendToRenderer, geminiSessionRef, randomNames = null) {
     const x = Math.floor((screenWidth - windowWidth) / 2);
     const y = 0;
     mainWindow.setPosition(x, y);
+    
+    // Linux-specific window adjustments
+    if (process.platform === 'linux') {
+        // Make window less visible on Linux
+        mainWindow.setFocusable(false);
+        // Position window strategically to avoid detection
+        mainWindow.setMinimumSize(1, 1);
+    }
 
     if (process.platform === 'win32') {
         mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);

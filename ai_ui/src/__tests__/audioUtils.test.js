@@ -19,7 +19,6 @@ describe('audioUtils unit tests', () => {
             pcmToWav(buffer, outPath, 16000, 1, 16);
             expect(fs.writeFileSync).toHaveBeenCalled();
             const written = fs.writeFileSync.mock.calls[0][1];
-            // RIFF header check
             expect(written.toString('ascii', 0, 4)).toBe('RIFF');
             expect(written.toString('ascii', 8, 12)).toBe('WAVE');
             expect(written.length).toBe(44 + buffer.length);

@@ -9,6 +9,14 @@ const DEFAULT_CONFIG = {
     layout: "normal"
 };
 
+// Security defaults for enhanced security manager
+const SECURITY_DEFAULTS = {
+    redactLogs: true,
+    networkStrictMode: false,
+    allowedDomains: [],
+    logLevel: 'normal'
+};
+
 // Get the config directory path based on OS
 function getConfigDir() {
     const platform = os.platform();
@@ -111,8 +119,41 @@ function getLocalConfig() {
     }
 }
 
+// Security settings functions for enhanced security manager
+function getSecuritySettings() {
+    try {
+        const config = getLocalConfig();
+        return {
+            ...SECURITY_DEFAULTS,
+            ...config.security
+        };
+    } catch (error) {
+        console.error('Error getting security settings:', error.message);
+        return SECURITY_DEFAULTS;
+    }
+}
+
+function updateSecuritySettings(updates = {}) {
+    try {
+        const config = getLocalConfig();
+        config.security = {
+            ...SECURITY_DEFAULTS,
+            ...config.security,
+            ...updates
+        };
+        writeConfig(config);
+        return config.security;
+    } catch (error) {
+        console.error('Error updating security settings:', error.message);
+        return SECURITY_DEFAULTS;
+    }
+}
+
 // Export only the necessary functions
 module.exports = {
     getLocalConfig,
-    writeConfig
+    writeConfig,
+    getSecuritySettings,
+    updateSecuritySettings,
+    SECURITY_DEFAULTS
 }; 

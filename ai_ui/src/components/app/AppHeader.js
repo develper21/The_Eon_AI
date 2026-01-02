@@ -135,7 +135,6 @@ export class AppHeader extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
-        // Start/stop timer based on view change
         if (changedProperties.has('currentView')) {
             if (this.currentView === 'assistant' && this.startTime) {
                 this._startTimer();
@@ -144,7 +143,6 @@ export class AppHeader extends LitElement {
             }
         }
 
-        // Start timer when startTime is set
         if (changedProperties.has('startTime')) {
             if (this.startTime && this.currentView === 'assistant') {
                 this._startTimer();
@@ -155,15 +153,12 @@ export class AppHeader extends LitElement {
     }
 
     _startTimer() {
-        // Clear any existing timer
         this._stopTimer();
 
-        // Only start timer if we're in assistant view and have a start time
         if (this.currentView === 'assistant' && this.startTime) {
             this._timerInterval = setInterval(() => {
-                // Trigger a re-render by requesting an update
                 this.requestUpdate();
-            }, 1000); // Update every second
+            }, 1000);
         }
     }
 
@@ -238,8 +233,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M12 21V7C12 5.89543 12.8954 5 14 5H21.4C21.7314 5 22 5.26863 22 5.6V18.7143"
                                           stroke="currentColor"
@@ -280,8 +274,7 @@ export class AppHeader extends LitElement {
                                                 viewBox="0 0 24 24"
                                                 fill="none"
                                                 xmlns="http://www.w3.org/2000/svg"
-                                                color="currentColor"
-                                            >
+                                                color="currentColor">
                                                 <path d="M18.5 15L5.5 15" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
                                                 <path
                                                     d="M16 4L8 4"
@@ -323,8 +316,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
                                           stroke="currentColor"
@@ -349,8 +341,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
                                           stroke="currentColor"
@@ -386,8 +377,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
                                           stroke="currentColor"
@@ -412,8 +402,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M6.75827 17.2426L12.0009 12M17.2435 6.75736L12.0009 12M12.0009 12L6.75827 6.75736M12.0009 12L17.2435 17.2426"
                                           stroke="currentColor"
@@ -433,8 +422,7 @@ export class AppHeader extends LitElement {
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       xmlns="http://www.w3.org/2000/svg"
-                                      color="currentColor"
-                                  >
+                                      color="currentColor">
                                       <path
                                           d="M6.75827 17.2426L12.0009 12M17.2435 6.75736L12.0009 12M12.0009 12L6.75827 6.75736M12.0009 12L17.2435 17.2426"
                                           stroke="currentColor"
