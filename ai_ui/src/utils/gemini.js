@@ -6,6 +6,7 @@ const { getSystemPrompt } = require('./prompts');
 const fs = require('fs');
 const path = require('path');
 
+// Conversation tracking variables
 let currentSessionId = null;
 let currentTranscription = '';
 let conversationHistory = [];
@@ -13,6 +14,10 @@ let isInitializingSession = false;
 let isRefreshingSession = false;
 let lastSessionRefresh = 0;
 let turnsSinceRefresh = 0;
+
+// CRITICAL FIX: Per-question buffer isolation
+let activeQuestionId = null;
+let questionBuffers = new Map(); // questionId -> buffer
 const AUTO_REFRESH_TURN_LIMIT = 6;
 
 const CONNECTION_CONSTANTS = {
@@ -405,10 +410,17 @@ function sendToRenderer(channel, data) {
 }
 
 // Conversation management functions
-function initializeNewSession() {
+function initializeNewSession(clearBuffers = true) {
     currentSessionId = Date.now().toString();
     currentTranscription = '';
     conversationHistory = [];
+    
+    // CRITICAL FIX: Clear all question buffers when starting new session (unless explicitly prevented)
+    if (clearBuffers) {
+        activeQuestionId = null;
+        questionBuffers.clear();
+        console.log('[BUFFER CLEAR] All question buffers cleared');
+    }
     console.log('New conversation session started:', currentSessionId);
 }
 
@@ -660,13 +672,13 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
     // Initialize new conversation session (only if not reconnecting)
     if (!isReconnection) {
-        initializeNewSession();
+        initializeNewSession(true); // Clear buffers for new connections
     }
 
     try {
         let session;
         session = await client.live.connect({
-            model: 'gemini-live-2.5-flash-preview',
+            model: 'gemini-2.0-flash-exp',
             callbacks: {
                 onopen: () => {
                     sendToRenderer('update-status', 'Live session connected');
@@ -682,8 +694,30 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                         connectionManager.handleAcknowledgements(ackSeqs);
                     }
 
-                    if (message.serverContent?.inputTranscription?.results) {
-                        currentTranscription += formatSpeakerResults(message.serverContent.inputTranscription.results);
+                    const transcriptionPayload = message.serverContent?.inputTranscription;
+                    if (transcriptionPayload) {
+                        let transcriptionText = '';
+
+                        if (transcriptionPayload.results) {
+                            transcriptionText = formatSpeakerResults(transcriptionPayload.results);
+                        } else if (typeof transcriptionPayload.text === 'string') {
+                            transcriptionText = transcriptionPayload.text;
+                        }
+
+                        if (transcriptionText) {
+                            currentTranscription += transcriptionText;
+
+                            // CRITICAL FIX: Create question ID for voice input like text input
+                            if (!activeQuestionId && transcriptionText.trim()) {
+                                const questionId = `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                activeQuestionId = questionId;
+                                questionBuffers.set(questionId, ''); // Start with empty buffer for this question
+
+                                console.log('[VOICE INPUT] Detected voice question:', transcriptionText.trim());
+                                console.log('[VOICE INPUT] Created question ID:', questionId);
+                                console.log('[BUFFER ISOLATION] Created isolated buffer for voice question');
+                            }
+                        }
                     }
 
                     // Handle AI model response
@@ -693,34 +727,88 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                             if (part.text) {
                                 messageBuffer += part.text;
                                 sendToRenderer('update-response', messageBuffer);
+                        // Show loader when AI starts generating response
+                        sendToRenderer('show-loader', 'Generating...');
+                        
+                        // Small delay to make loader visible
+                        setTimeout(() => {
+                            for (const part of message.serverContent.modelTurn.parts) {
+                                console.log(part);
+                                if (part.text) {
+                                    // CRITICAL FIX: Use isolated buffer for active question
+                                    if (activeQuestionId && questionBuffers.has(activeQuestionId)) {
+                                        const currentBuffer = questionBuffers.get(activeQuestionId) || '';
+                                        questionBuffers.set(activeQuestionId, currentBuffer + part.text);
+                                        
+                                        console.log('[BUFFER ISOLATION] Added chunk to question buffer:', activeQuestionId);
+                                        console.log('[BUFFER ISOLATION] Buffer length:', questionBuffers.get(activeQuestionId).length);
+                                        
+                                        // Send the isolated buffer
+                                        sendToRenderer('update-response', questionBuffers.get(activeQuestionId));
+                                    } else {
+                                        console.log('[BUFFER ISOLATION] No active question buffer - skipping chunk');
+                                        console.log('[BUFFER ISOLATION] Active question ID:', activeQuestionId);
+                                        console.log('[BUFFER ISOLATION] Available buffers:', Array.from(questionBuffers.keys()));
+                                        console.log('[BUFFER ISOLATION] Chunk content preview:', part.text.substring(0, 50) + '...');
+                                    }
+                                }
                             }
                         }
                     }
 
                     if (message.serverContent?.generationComplete) {
-                        sendToRenderer('update-response', messageBuffer);
+                        // CRITICAL FIX: Use isolated buffer for final response
+                        if (activeQuestionId && questionBuffers.has(activeQuestionId)) {
+                            const finalBuffer = questionBuffers.get(activeQuestionId) || '';
+                            sendToRenderer('update-response', finalBuffer);
+                            console.log('[FINAL] Sent complete response for question:', activeQuestionId);
+                            console.log('[FINAL] Final buffer length:', finalBuffer.length);
+                            
+                            // Save conversation turn when we have both transcription and AI response
+                            if (currentTranscription && finalBuffer) {
+                                saveConversationTurn(currentTranscription, finalBuffer);
+                                currentTranscription = ''; // Reset for next turn
+                            }
+                            
 
-                        // Save conversation turn when we have both transcription and AI response
-                        if (currentTranscription && messageBuffer) {
-                            saveConversationTurn(currentTranscription, messageBuffer);
-                            currentTranscription = ''; // Reset for next turn
-                        }
-
-                        sendToRenderer('reset-chat', {
-                            reason: 'generationComplete',
-                            timestamp: Date.now(),
-                            sessionId: currentSessionId,
-                        });
-                        initializeNewSession();
-                        messageBuffer = '';
-                        turnsSinceRefresh += 1;
-                        if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
-                            refreshLiveSession('turn-threshold');
+                            // CRITICAL FIX: Don't clear buffers immediately - wait for turnComplete signal
+                            console.log('[GENERATION COMPLETE] Buffer will remain active until turnComplete');
+                            // Buffer cleanup will happen in turnComplete handler to catch all late chunks
+                        } else {
+                            console.log('[FINAL] No active question buffer - discarding response');
+                            console.log('[FINAL] Active question ID:', activeQuestionId);
+                            console.log('[FINAL] Available buffers:', Array.from(questionBuffers.keys()));
                         }
                     }
 
                     if (message.serverContent?.turnComplete) {
                         sendToRenderer('update-status', 'Listening...');
+                        
+                        // CRITICAL FIX: Delay cleanup to catch any remaining chunks after turnComplete
+                        setTimeout(() => {
+                            if (activeQuestionId && questionBuffers.has(activeQuestionId)) {
+                                console.log('[TURN COMPLETE] Cleaning up buffer for question:', activeQuestionId);
+                                
+                                // Clean up the buffer for this question
+                                questionBuffers.delete(activeQuestionId);
+                                console.log('[BUFFER CLEANUP] Removed buffer for question:', activeQuestionId);
+                                activeQuestionId = null; // Clear active question
+
+                                sendToRenderer('reset-chat', {
+                                    reason: 'turnComplete',
+                                    timestamp: Date.now(),
+                                    sessionId: currentSessionId,
+                                });
+                                messageBuffer = '';
+                                turnsSinceRefresh += 1;
+                                if (turnsSinceRefresh >= AUTO_REFRESH_TURN_LIMIT) {
+                                    console.log('[AUTO-REFRESH] Turn limit reached, refreshing session');
+                                    refreshLiveSession('auto-turn-limit');
+                                }
+                            } else {
+                                console.log('[TURN COMPLETE] No active buffer to cleanup');
+                            }
+                        }, 3000); // Wait 3 seconds after turnComplete to catch remaining chunks
                     }
                 },
                 onerror: function (e) {
@@ -1034,8 +1122,42 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
                 return { success: false, error: 'Invalid text message' };
             }
 
-            console.log('Sending text message:', text);
-                        await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
+            console.log('[NEW MESSAGE] Sending text message:', text);
+            
+            // NUCLEAR RESET: Complete context wipeout for fresh start
+            console.log('[NUCLEAR RESET] COMPLETELY ERASING ALL PREVIOUS CONTEXT');
+            console.log('[NUCLEAR RESET] Clearing conversation history:', conversationHistory.length, 'items');
+            console.log('[NUCLEAR RESET] Clearing transcription:', currentTranscription.length, 'chars');
+            
+            // Reset everything to pristine state (but don't clear question buffers)
+            currentSessionId = Date.now().toString();
+            currentTranscription = '';
+            conversationHistory = [];
+            
+            console.log('[NUCLEAR RESET] All memory wiped - starting fresh');
+            console.log('[NUCLEAR RESET] AI will have ZERO previous context');
+            console.log('[NUCLEAR RESET] Preserving question buffers for current response');
+            
+            // Send system reset message first to ensure AI memory is cleared
+            const resetMessage = "**SYSTEM: CONTEXT RESET. This is a completely new conversation. Ignore all previous messages. Start fresh. Do NOT continue from previous answers.**";
+            await geminiSessionRef.current.sendRealtimeInput({ text: resetMessage });
+            
+            // Small delay to ensure reset is processed
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // CRITICAL FIX: Create unique question ID and isolated buffer AFTER reset
+            const questionId = `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            activeQuestionId = questionId;
+            questionBuffers.set(questionId, ''); // Start with empty buffer for this question
+            
+            console.log('[QUESTION ID] New question ID:', questionId);
+            console.log('[BUFFER ISOLATION] Created isolated buffer for question');
+            
+            // Now send the actual question
+            await geminiSessionRef.current.sendRealtimeInput({ text: text.trim() });
+            
+            console.log('[NUCLEAR RESET] Fresh message sent with zero context');
+            console.log('[QUESTION ID] Active question ID after send:', activeQuestionId);
             return { success: true };
         } catch (error) {
             console.error('Error sending text:', error);

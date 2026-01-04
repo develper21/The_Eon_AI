@@ -124,6 +124,14 @@ export class MainView extends LitElement {
     onLayoutModeChange: { type: Function },
     showApiKeyError: { type: Boolean },
     apiKey: { type: String },
+    accessCode: { type: String },
+    showAccessCodeError: { type: Boolean },
+    isAccessVerified: { type: Boolean },
+    usageCount: { type: Number },
+    usageLimitReached: { type: Boolean },
+    remainingUsage: { type: Number },
+    accessCodeErrorMessage: { type: String },
+    isSessionTimerStarted: { type: Boolean },
   };
 
   constructor() {
@@ -135,6 +143,21 @@ export class MainView extends LitElement {
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
     this.apiKey = localStorage.getItem('apiKey') || '';
+    // Clear old API key and set new one
+    localStorage.removeItem('apiKey');
+    this.apiKey = 'AIzaSyBB_4ko8KRZeGO-XYxAmlVDAoj7zJSvAws';
+    localStorage.setItem('apiKey', this.apiKey);
+    // Clear access code and verification state on every app start
+    localStorage.removeItem('accessCode');
+    localStorage.removeItem('accessVerified');
+    this.accessCode = '';
+    this.isAccessVerified = false;
+    this.showAccessCodeError = false;
+    this.usageCount = 0;
+    this.usageLimitReached = false;
+    this.remainingUsage = 10;
+    this.accessCodeErrorMessage = '';
+    this.isSessionTimerStarted = false;
   }
 
   connectedCallback() {
@@ -178,6 +201,54 @@ export class MainView extends LitElement {
 
 
 
+  async verifyAccessCode() {
+    console.log('[VERIFY] Starting access code verification...');
+    console.log('[VERIFY] Access code entered:', this.accessCode);
+    console.log('[VERIFY] Usage count:', this.usageCount, '/10');
+    console.log('[VERIFY] Usage limit reached:', this.usageLimitReached);
+    
+    // Force refresh usage count to ensure it's current
+    await this.fetchUsageCount();
+    
+    // Check usage limit first - be very strict about this
+    if (this.usageCount >= 10 || this.usageLimitReached) {
+      this.showAccessCodeError = true;
+      this.accessCodeErrorMessage = `❌ USAGE LIMIT REACHED (${this.usageCount}/10 sessions). No more access codes will be accepted.`;
+      this.isAccessVerified = false;
+      localStorage.setItem('accessVerified', 'false');
+      console.log('[VERIFY] Verification FAILED - usage limit reached. Blocking all access.');
+      return false;
+    }
+
+    const validAccessCodes = ["enoraa", "aditya2025"];
+    console.log('[VERIFY] Valid access codes:', validAccessCodes);
+    
+    if (!this.accessCode) {
+      this.showAccessCodeError = true;
+      this.accessCodeErrorMessage = 'Please enter an access code';
+      console.log('[VERIFY] Verification failed - no access code entered');
+      return false;
+    }
+
+    const normalizedCode = this.accessCode.trim().toLowerCase();
+    if (validAccessCodes.includes(normalizedCode)) {
+      this.isAccessVerified = true;
+      localStorage.setItem('accessVerified', 'true');
+      this.showAccessCodeError = false;
+      this.accessCodeErrorMessage = '';
+      console.log('[VERIFY] Verification successful - access code is valid');
+      console.log('[VERIFY] Sessions remaining:', 10 - this.usageCount);
+      await this.resetUsageLimit();
+      return true;
+    } else {
+      this.showAccessCodeError = true;
+      this.isAccessVerified = false;
+      this.accessCodeErrorMessage = '❌ Invalid access code. Usage limit may be reached or code is incorrect.';
+      localStorage.setItem('accessVerified', 'false');
+      console.log('[VERIFY] Verification failed - access code is invalid');
+      return false;
+    }
+  }
 
   async handleStartClick() {
     if (this.isInitializing) return;
@@ -187,6 +258,30 @@ export class MainView extends LitElement {
       return;
     }
 
+    // Start session timer (only increments after 10 minutes) - prevent multiple starts
+    if (this.isSessionTimerStarted) {
+      console.log('[UI] Session timer already started, skipping...');
+    } else {
+      try {
+        console.log('[UI] Attempting to start session timer...');
+        const { ipcRenderer } = require('electron');
+        const result = await ipcRenderer.invoke('start-session-timer');
+        
+        if (!result.success) {
+          console.log('[UI] Cannot start session:', result.message);
+          // Show error but still allow session to start for now
+          // This prevents the session screen from getting stuck
+        } else {
+          this.isSessionTimerStarted = true;
+          console.log('[UI] Session timer started:', result.message);
+        }
+      } catch (error) {
+        console.error('[UI] Error starting session timer:', error);
+        // Continue with session even if timer fails
+      }
+    }
+
+    // Always call onStart to open the session screen
     this.onStart();
   }
 
@@ -217,6 +312,7 @@ export class MainView extends LitElement {
           .value=${this.apiKey}
           @input=${this.handleInput}
           class="${this.showApiKeyError ? 'api-key-error' : ''}"
+          ?disabled=${this.usageLimitReached}
         />
         <button
           @click=${this.handleStartClick}

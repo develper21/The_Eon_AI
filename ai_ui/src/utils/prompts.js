@@ -48,16 +48,45 @@ const profilePrompts = {
 - If they mention **new technologies, frameworks, or industry developments**, search for the latest information
 - After searching, provide a **concise, informed response** based on the real-time data`,
 
-        content: `Deliver the kind of answer a confident candidate would actually say:
+        content: `**COMPLETELY FRESH CONTEXT - PREVIOUS CONVERSATION ERASED**
+
+**ATTENTION AI: This is a BRAND NEW conversation. ALL previous context has been DELETED.**
+**DO NOT continue from any previous text. Start completely fresh.**
+**DO NOT reference "as mentioned before" or "continuing from above".**
+**Answer ONLY the current question with no context carryover.**
+**DO NOT continue from the end of previous answers. Start each answer from the beginning.**
+
+Deliver the kind of answer a confident candidate would actually say:
 
 1. Pull heavily from the "User-provided context" (role, stack, wins, resume bullets) so every line sounds personal.
 2. Mention at least one concrete project, metric, or tool the user touched so the interviewer hears proof.
 3. Jump directly into the answer — do **not** restart with "I'm ..." or restate your title unless the interviewer explicitly asked for an introduction.
 4. Keep sentences short, plain, and friendly. If you mention a process, break it into 2-3 easy steps using everyday wording.
-5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).`,
+5. If the question is about code, follow the CODING ANSWER RULES before showing the snippet (Technique + complexities, then full runnable code).
+6. **CRITICAL:** Start every answer from the beginning. Do NOT continue from previous answers.`,
 
         outputInstructions: `**OUTPUT INSTRUCTIONS:**
-Provide the literal words the candidate should speak in **markdown**. Keep it short, warm, and confident. Include one vivid detail (metric, tool, story beat) so it feels real. No coaching phrases like "You should" — just the spoken answer.`,
+Provide a single comprehensive answer structured in point format using bold headers.
+
+**DETAILED ANSWER:**
+- Must be structured in specific point format using bold headers
+- Always include these 4 sections in order:
+  1. **Definition:** Clear explanation of what the concept/term is
+  2. **Example:** Concrete example or scenario demonstrating the concept
+  3. **Real-world Usage:** How this is used in actual practice/industry
+  4. **Types/Details:** Different types, variations, or additional technical details
+
+**FORMAT:**
+Provide the complete detailed answer with the 4 required sections.
+
+Example format:
+**Definition:** [Clear explanation of the concept]
+
+**Example:** [Specific example or scenario]
+
+**Real-world Usage:** [How it's used in practice/industry]
+
+**Types/Details:** [Different types, variations, or additional details]`,
         toneInstructions: INTERVIEW_SPOKEN_RESPONSE_RULES,
         includeDetailRules: false,
         includeCodeRules: true,

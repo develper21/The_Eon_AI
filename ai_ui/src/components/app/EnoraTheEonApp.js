@@ -50,7 +50,7 @@ export class EnoraTheEonApp extends LitElement {
             overflow-y: auto;
             margin-top: var(--main-content-margin-top);
             border-radius: var(--content-border-radius);
-            transition: all 0.15s ease-out;
+            transition: none;
             background: var(--main-content-background);
         }
 
@@ -159,6 +159,27 @@ export class EnoraTheEonApp extends LitElement {
         }
     }
 
+    createQuestionPage(question) {
+        const placeholderAnswer = '*Preparing detailed answer...*';
+        const entry = this.formatQuestionResponse(question, placeholderAnswer);
+        
+        // ALWAYS create new page - never append to existing
+        this.responses = [...this.responses, entry];
+        this.currentResponseIndex = this.responses.length - 1;
+        this._questionResponseIndex = this.currentResponseIndex;
+        
+        // Lock this page to this question only
+        this._awaitingNewResponse = false; // Don't allow other responses to merge
+        this._currentResponseIsComplete = false;
+        this.clearResponseWatchdog();
+        this.shouldAnimateResponse = true;
+        this.requestUpdate();
+        
+        console.log('[NEW PAGE] Created dedicated page for question:', question.text);
+        console.log('[NEW PAGE] Page index:', this._questionResponseIndex);
+        console.log('[NEW PAGE] Total pages:', this.responses.length);
+    }
+
     async handleRetryCapture() {
         const captureInterval = this.fastMode ? 'manual' : this.selectedScreenshotInterval;
         const captureQuality = this.fastMode ? 'low' : this.selectedImageQuality;
@@ -241,13 +262,24 @@ export class EnoraTheEonApp extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.on('update-response', (_, response) => {
-                let payload = response;
-                if (this._activeQuestion) {
-                    payload = this.formatQuestionResponse(this._activeQuestion, response);
-                }
-                this.setResponse(payload);
-                if (this._activeQuestion) {
+                console.log('[IPC] update-response received, active question:', !!this._activeQuestion);
+                console.log('[IPC] Current questionResponseIndex:', this._questionResponseIndex);
+                
+                // If we have an active question with a placeholder, use that index
+                if (this._activeQuestion && this._questionResponseIndex !== null && this._questionResponseIndex >= 0) {
+                    const payload = this.formatQuestionResponse(this._activeQuestion, response);
+                    console.log('[IPC] Using existing question page:', this._questionResponseIndex);
+                    this.setResponse(payload);
+                } else if (this._activeQuestion) {
+                    // This should not happen with our new logic, but handle it
+                    const payload = this.formatQuestionResponse(this._activeQuestion, response);
+                    console.log('[IPC] Creating new page for question (fallback)');
+                    this.setResponse(payload);
                     this._questionResponseIndex = this.currentResponseIndex;
+                } else {
+                    // Non-question response
+                    console.log('[IPC] Non-question response');
+                    this.setResponse(response);
                 }
             });
             ipcRenderer.on('update-status', (_, status) => {
@@ -499,8 +531,19 @@ export class EnoraTheEonApp extends LitElement {
         this.updatePendingQuestion(question.id, { status: 'answering', startedAt: Date.now() });
         this.setStatus('Answering interviewer…');
 
-        const prompt = this.buildQuestionPrompt(question);
+        // COMPLETELY RESET STATE - ensure no contamination from previous question
+        console.log('[RESET] Clearing all response state for new question');
         this._awaitingNewResponse = true;
+        this._currentResponseIsComplete = false;
+        this._autoResetPending = false;
+        this._autoResetInProgress = false;
+        this.clearResponseWatchdog();
+
+        // Create placeholder page for this question so streaming updates stay on same page
+        console.log('[NEW QUESTION] Creating placeholder page for question:', question.text);
+        this.createQuestionPage(question);
+
+        const prompt = this.buildQuestionPrompt(question);
 
         try {
             const result = await window.cheddar.sendTextMessage(prompt);
@@ -532,8 +575,10 @@ export class EnoraTheEonApp extends LitElement {
     }
 
     formatQuestionResponse(question, answerText) {
+        // Format as single detailed answer
         const questionLine = `**Q (Interviewer):** ${question.text}`;
         const answerLine = `**A (You):** ${answerText}`;
+        
         return `${questionLine}\n\n${answerLine}`;
     }
 
@@ -542,14 +587,25 @@ export class EnoraTheEonApp extends LitElement {
             return;
         }
 
+        console.log('[COMPLETE] Finishing question, resetting page lock');
+        console.log('[COMPLETE] Question index was:', this._questionResponseIndex);
+
         const statusUpdate = success ? { status: 'answered', completedAt: Date.now() } : { status: 'error', error: errorMessage };
         this.updatePendingQuestion(this._activeQuestion.id, statusUpdate);
+        
+        // IMPORTANT: Clear the question reference so next question can create new page
         this._activeQuestion = null;
-        this._questionResponseIndex = null;
+        this._questionResponseIndex = null; // This allows next question to create new page
         this.updateAssistantStatusChip();
+
+        // Reset response state for next question
+        this._awaitingNewResponse = true;
+        this._currentResponseIsComplete = false;
+        this.clearResponseWatchdog();
 
         if (success) {
             this.setStatus('Ready');
+            console.log('[COMPLETE] Ready for next question - page lock released');
         } else {
             this.setStatus('Question answer failed');
         }
@@ -587,17 +643,48 @@ export class EnoraTheEonApp extends LitElement {
     }
 
     setResponse(response) {
-        // Check if this looks like a filler response (very short responses to hmm, ok, etc)
-        const isFillerResponse =
-            response.length < 30 &&
-            (response.toLowerCase().includes('hmm') ||
-                response.toLowerCase().includes('okay') ||
-                response.toLowerCase().includes('next') ||
-                response.toLowerCase().includes('go on') ||
-                response.toLowerCase().includes('continue'));
+        console.log('='.repeat(80));
+        console.log('[DEBUG] setResponse called');
+        console.log('[DEBUG] Response length:', response.length);
+        console.log('[DEBUG] Response preview:', response.substring(0, 200) + '...');
+        console.log('[DEBUG] Has active question:', !!this._activeQuestion);
+        console.log('[DEBUG] QuestionResponseIndex:', this._questionResponseIndex);
+        console.log('[DEBUG] Total responses before:', this.responses.length);
+        console.log('[DEBUG] Current index:', this.currentResponseIndex);
+        console.log('[DEBUG] _awaitingNewResponse:', this._awaitingNewResponse);
+        console.log('[DEBUG] _currentResponseIsComplete:', this._currentResponseIsComplete);
+        
+        // Check if response contains Q&A markers
+        const hasQMarker = response.includes('**Q (Interviewer):**');
+        const hasAMarker = response.includes('**A (You):**');
+        console.log('[DEBUG] Has Q marker:', hasQMarker);
+        console.log('[DEBUG] Has A marker:', hasAMarker);
+        
+        // ABSOLUTE RULE: If we have a question placeholder, ONLY update that page
+        if (this._questionResponseIndex !== null && this._questionResponseIndex >= 0) {
+            console.log('[DEBUG] Using question placeholder path');
+            // Update ONLY the placeholder page for this question
+            const updatedResponses = [...this.responses];
+            updatedResponses[this._questionResponseIndex] = response;
+            this.responses = updatedResponses;
+            this.currentResponseIndex = this._questionResponseIndex;
+            this._awaitingNewResponse = false;
+            this._currentResponseIsComplete = false;
+            this.clearResponseWatchdog();
+            
+            console.log('[DEBUG] UPDATED question page ONLY');
+            console.log('[DEBUG] Page index:', this._questionResponseIndex);
+            console.log('[DEBUG] Total pages after:', this.responses.length);
+            
+            this.shouldAnimateResponse = true;
+            this.requestUpdate();
+            console.log('='.repeat(80));
+            return; // HARD STOP - never allow any other logic
+        }
 
+        // If we get here, this is NOT a question response - handle normally
+        console.log('[DEBUG] Using normal response path');
         if (this._awaitingNewResponse || this.responses.length === 0) {
-            // Always add as new response when explicitly waiting for one
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._awaitingNewResponse = false;
@@ -606,15 +693,12 @@ export class EnoraTheEonApp extends LitElement {
                 this._autoResetPending = true;
             }
             this.clearResponseWatchdog();
-            console.log('[setResponse] Pushed new response:', response);
-        } else if (!this._currentResponseIsComplete && !isFillerResponse && this.responses.length > 0) {
-            // For substantial responses, update the last one (streaming behavior)
-            // Only update if the current response is not marked as complete
+            console.log('[DEBUG] Created standalone response page');
+        } else if (!this._currentResponseIsComplete && this.responses.length > 0) {
             this.responses = [...this.responses.slice(0, this.responses.length - 1), response];
             this.clearResponseWatchdog();
-            console.log('[setResponse] Updated last response:', response);
+            console.log('[DEBUG] Updated latest response chunk');
         } else {
-            // For filler responses or when current response is complete, add as new
             this.responses = [...this.responses, response];
             this.currentResponseIndex = this.responses.length - 1;
             this._currentResponseIsComplete = false;
@@ -622,10 +706,13 @@ export class EnoraTheEonApp extends LitElement {
                 this._autoResetPending = true;
             }
             this.clearResponseWatchdog();
-            console.log('[setResponse] Added response as new:', response);
+            console.log('[DEBUG] Added additional response');
         }
+
+        console.log('[DEBUG] Final responses count:', this.responses.length);
         this.shouldAnimateResponse = true;
         this.requestUpdate();
+        console.log('='.repeat(80));
     }
 
     handleResponseCompleted() {
