@@ -1,6 +1,8 @@
 // stealthFeatures.js - Additional stealth features for process hiding
 
 const { getCurrentRandomDisplayName } = require('./processNames');
+const { enhancedSecurityManager } = require('./securityManager');
+const { applyLinuxStealthMeasures } = require('./linuxStealth');
 
 /**
  * Apply additional stealth measures to the Electron application
@@ -27,6 +29,13 @@ function applyStealthMeasures(mainWindow) {
         } catch (error) {
             console.warn('Could not hide from Mission Control:', error.message);
         }
+    }
+    
+    // Apply Linux-specific stealth measures
+    if (process.platform === 'linux') {
+        applyLinuxStealthMeasures(mainWindow).catch(error => {
+            console.warn('Could not apply Linux stealth measures:', error.message);
+        });
     }
 
     // Set random app name in menu bar (macOS)
@@ -61,6 +70,14 @@ function applyStealthMeasures(mainWindow) {
         console.log('Set random user agent');
     } catch (error) {
         console.warn('Could not set user agent:', error.message);
+    }
+
+    // Initialize enhanced security manager
+    try {
+        enhancedSecurityManager.startAntiDebugging();
+        console.log('Enhanced security manager initialized');
+    } catch (error) {
+        console.warn('Could not initialize enhanced security:', error.message);
     }
 }
 

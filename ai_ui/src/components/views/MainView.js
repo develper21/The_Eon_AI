@@ -142,6 +142,7 @@ export class MainView extends LitElement {
     this.onLayoutModeChange = () => {};
     this.showApiKeyError = false;
     this.boundKeydownHandler = this.handleKeydown.bind(this);
+    this.apiKey = localStorage.getItem('apiKey') || '';
     // Clear old API key and set new one
     localStorage.removeItem('apiKey');
     this.apiKey = 'AIzaSyBB_4ko8KRZeGO-XYxAmlVDAoj7zJSvAws';
@@ -167,8 +168,6 @@ export class MainView extends LitElement {
     document.addEventListener('keydown', this.boundKeydownHandler);
     this.loadLayoutMode?.();
     resizeLayout();
-    // Fetch usage count from main process
-    this.fetchUsageCount();
   }
 
   disconnectedCallback() {
@@ -199,11 +198,8 @@ export class MainView extends LitElement {
     if (this.showApiKeyError) this.showApiKeyError = false;
   }
 
-  handleAccessCodeInput(e) {
-    this.accessCode = e.target.value.trim();
-    localStorage.setItem('accessCode', this.accessCode);
-    if (this.showAccessCodeError) this.showAccessCodeError = false;
-  }
+
+
 
   async verifyAccessCode() {
     console.log('[VERIFY] Starting access code verification...');
@@ -257,14 +253,6 @@ export class MainView extends LitElement {
   async handleStartClick() {
     if (this.isInitializing) return;
 
-    // Check access code first
-    if (!this.isAccessVerified) {
-      const isVerified = await this.verifyAccessCode();
-      if (!isVerified) {
-        return;
-      }
-    }
-
     if (!this.apiKey) {
       this.showApiKeyError = true;
       return;
@@ -301,21 +289,7 @@ export class MainView extends LitElement {
     this.onAPIKeyHelp();
   }
 
-  async fetchUsageCount() {
-    try {
-      const { ipcRenderer } = require('electron');
-      const usageInfo = await ipcRenderer.invoke('check-usage-limit');
-      this.usageCount = usageInfo.currentUsage;
-      this.usageLimitReached = usageInfo.limitReached;
-      this.remainingUsage = usageInfo.remaining;
-      console.log('Usage info fetched:', usageInfo);
-    } catch (error) {
-      console.error('Error fetching usage count:', error);
-      this.usageCount = 0;
-      this.usageLimitReached = false;
-      this.remainingUsage = 10;
-    }
-  }
+
 
   getStartButtonText() {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -330,48 +304,7 @@ export class MainView extends LitElement {
     return html`
       <div class="welcome">Welcome</div>
       
-      <!-- Usage Count Display with Limit -->
-      <div style="text-align: center; margin-bottom: 20px; color: #888; font-size: 14px;">
-        <div style="margin-bottom: 8px;">
-          📊 Usage Count: <strong>${this.usageCount}/10</strong> sessions
-        </div>
-        <div style="font-size: 12px; color: ${this.usageLimitReached ? '#ff4444' : '#666'};">
-          ${this.usageLimitReached 
-            ? '⚠️ Usage limit reached' 
-            : `✅ ${this.remainingUsage} sessions remaining`
-          }
-        </div>
-        <div style="font-size: 11px; color: #999; margin-top: 4px;">
-          (Counts only after 10+ minute sessions)
-        </div>
-      </div>
-
-      <!-- Access Code Input -->
-      <div class="input-group">
-        <input
-          type="password"
-          placeholder="Enter Access Code"
-          .value=${this.accessCode}
-          @input=${this.handleAccessCodeInput}
-          class="${this.showAccessCodeError ? 'api-key-error' : ''}"
-          ?disabled=${this.usageLimitReached}
-        />
-        <button
-          @click=${this.verifyAccessCode}
-          class="start-button"
-          ?disabled=${this.usageLimitReached}
-        >
-          ${this.usageLimitReached ? 'Limit Reached' : (this.isAccessVerified ? '✓ Verified' : 'Verify')}
-        </button>
-      </div>
-
-      ${this.showAccessCodeError ? html`
-        <div style="color: #ff4444; font-size: 12px; text-align: center; margin-bottom: 15px;">
-          ${this.accessCodeErrorMessage}
-        </div>
-      ` : ''}
-
-      <!-- API Key Input (only enabled if access code is verified) -->
+      <!-- API Key Input -->
       <div class="input-group">
         <input
           type="password"
@@ -384,7 +317,7 @@ export class MainView extends LitElement {
         <button
           @click=${this.handleStartClick}
           class="start-button ${this.isInitializing ? 'initializing' : ''}"
-        </button>
+        >${this.getStartButtonText()}</button>
       </div>
  `;
 }

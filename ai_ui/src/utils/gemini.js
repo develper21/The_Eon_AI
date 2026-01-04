@@ -722,6 +722,11 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
+                        for (const part of message.serverContent.modelTurn.parts) {
+                            console.log(part);
+                            if (part.text) {
+                                messageBuffer += part.text;
+                                sendToRenderer('update-response', messageBuffer);
                         // Show loader when AI starts generating response
                         sendToRenderer('show-loader', 'Generating...');
                         
@@ -748,10 +753,7 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                                     }
                                 }
                             }
-                            // Hide loader after processing response
-                            sendToRenderer('hide-loader');
-                            sendToRenderer('emergency-stop-loader');
-                        }, 500);
+                        }
                     }
 
                     if (message.serverContent?.generationComplete) {

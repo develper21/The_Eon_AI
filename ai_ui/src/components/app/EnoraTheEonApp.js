@@ -372,23 +372,8 @@ export class EnoraTheEonApp extends LitElement {
             }
         };
 
-        this._hackerrankScreenshotHandler = async () => {
-            try {
-                if (typeof window.captureHackerrankScreenshot === 'function') {
-                    const hackerrankContext = (this.latestDraftMessage || '').trim();
-                    await window.captureHackerrankScreenshot(hackerrankContext);
-                } else {
-                    throw new Error('HackerRank screenshot module not loaded');
-                }
-            } catch (error) {
-                console.error('HackerRank screenshot failed:', error);
-                this.setStatus('HackerRank screenshot failed: ' + (error?.message || 'unknown error'));
-            }
-        };
-
         this.handleManualScreenshotWithText = this._manualScreenshotHandler;
         this.handleLeetScreenshot = this._leetScreenshotHandler;
-        this.handleHackerrankScreenshot = this._hackerrankScreenshotHandler;
 
         this._connectionMetricsListener = event => {
             this.connectionHealth = event.detail || null;
@@ -952,6 +937,8 @@ export class EnoraTheEonApp extends LitElement {
             if (!window.cheddar || !window.cheddar.getAllConversationSessions) {
                 console.log('[APP] Session data not available - cheddar object:', !!window.cheddar, 'getAllConversationSessions:', !!(window.cheddar && window.cheddar.getAllConversationSessions));
                 this.setStatus('Session data not available');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -962,6 +949,8 @@ export class EnoraTheEonApp extends LitElement {
             if (!Array.isArray(allSessions) || allSessions.length === 0) {
                 console.log('[APP] No interview sessions found');
                 this.setStatus('No interview sessions found');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -982,6 +971,8 @@ export class EnoraTheEonApp extends LitElement {
             if (runSessions.length === 0) {
                 console.log('[APP] No sessions available for PDF');
                 this.setStatus('No sessions available for PDF');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -1000,6 +991,8 @@ export class EnoraTheEonApp extends LitElement {
             if (combinedHistory.length === 0) {
                 console.log('[APP] No interview data to export');
                 this.setStatus('No interview data to export');
+                this.downloadState = 'idle';
+                this.requestUpdate();
                 return;
             }
 
@@ -1215,7 +1208,6 @@ export class EnoraTheEonApp extends LitElement {
                                       .downloadState=${this.downloadState}
                                       .onManualScreenshot=${() => this._manualScreenshotHandler()}
                                       .onLeetScreenshot=${() => this._leetScreenshotHandler()}
-                                      .onHackerrankScreenshot=${() => this._hackerrankScreenshotHandler()}
                                       .onFastModeToggle=${() => this.handleFastModeChange(!this.fastMode)}
                                       .onForceReconnect=${() => this.handleForceReconnect()}
                                       .onRestartCapture=${() => this.handleRestartCapture()}

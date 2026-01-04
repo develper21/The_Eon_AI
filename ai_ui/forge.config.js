@@ -32,6 +32,7 @@ module.exports = {
     makers: [
         {
             name: '@electron-forge/maker-squirrel',
+            platforms: ['win32'], // Specify Windows platform
             config: {
                 name: 'eonai',
                 productName: 'EON AI',
@@ -44,6 +45,10 @@ module.exports = {
             name: '@electron-forge/maker-dmg',
             platforms: ['darwin'],
         },
+        {
+            name: '@electron-forge/maker-zip',
+            platforms: ['win32', 'darwin', 'linux'],
+        }
     ],
     plugins: [
         {

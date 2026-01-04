@@ -4,16 +4,28 @@ if (require('electron-squirrel-startup')) {
 
 const { app, BrowserWindow, shell, ipcMain, dialog, autoUpdater } = require('electron');
 const fetch = require("node-fetch");
-
-const { createWindow, updateGlobalShortcuts } = require('./utils/window');
+const { createWindow, updateGlobalShortcuts } https://github.com/DeepGoyani/InterviewCrackerAI/pull/9/conflict?name=ai_ui%252Fsrc%252Fcomponents%252Fviews%252FMainView.js&ancestor_oid=c1762dd4899d313524a090b0c19024f066741011&base_oid=2e03e855571b59ca6db27e0774f803af3ab91542&head_oid=d40ad80040c5b3cd9b25165e3a0837c6e5931f13= require('./utils/window');
 const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer } = require('./utils/gemini');
-const { initializeRandomProcessNames } = require('./utils/processRandomizer');
-const { applyAntiAnalysisMeasures } = require('./utils/stealthFeatures');
+const { initializeRandomProcessNames } = require('./utils/security/antiAnalysis/processRandomizer');
+const { applyAntiAnalysisMeasures } = require('./utils/security/antiAnalysis/stealthFeatures');
 const { getLocalConfig, writeConfig } = require('./config');
 const { generateInterviewPdf } = require('./utils/interviewPdf');
+const { enhancedSecurityManager } = require('./utils/security/dataProtection/securityManager');
+const NetworkObfuscator = require('./utils/security/network/networkObfuscator');
+const ScreenshotObfuscator = require('./utils/security/dataProtection/screenshotObfuscator');
+const RuntimeProtection = require('./utils/security/antiAnalysis/runtimeProtection');
+const BehavioralRandomizer = require('./utils/security/behavioral/behavioralRandomizer');
+const MemoryProtector = require('./utils/security/dataProtection/memoryProtector');
 
 const geminiSessionRef = { current: null };
 let mainWindow = null;
+
+// Initialize enhanced security components
+const networkObfuscator = new NetworkObfuscator();
+const screenshotObfuscator = new ScreenshotObfuscator();
+const runtimeProtection = new RuntimeProtection();
+const behavioralRandomizer = new BehavioralRandomizer();
+const memoryProtector = new MemoryProtector();
 
 // Initialize random process names for stealth
 const randomNames = initializeRandomProcessNames();
@@ -71,8 +83,6 @@ function setupAutoUpdater() {
     checkForUpdates();
     setInterval(checkForUpdates, CHECK_INTERVAL_MS);
 }
-
-
 
 function createMainWindow() {
     mainWindow = createWindow(sendToRenderer, geminiSessionRef, randomNames);
@@ -328,10 +338,6 @@ function getUsageCount() {
     }
 }
 
-function isUsageLimitReached() {
-    const currentUsage = getUsageCount();
-    return currentUsage >= MAX_USAGE_LIMIT;
-}
 
 function resetUsageCount() {
     try {
@@ -377,6 +383,17 @@ async function checkVersion() {
 app.whenReady().then(async () => {
     await applyAntiAnalysisMeasures();
 
+    // Initialize enhanced security systems
+    try {
+        console.log('Initializing enhanced security systems...');
+        await runtimeProtection.initialize();
+        await memoryProtector.initialize();
+        behavioralRandomizer.initialize();
+        console.log('Enhanced security systems initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize enhanced security:', error);
+    }
+
     // Version check disabled to prevent update notifications
     // checkVersion().catch(err => {
     //     console.log("Version check failed in background:", err);
@@ -397,6 +414,18 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     stopMacOSAudioCapture();
+    
+    // Cleanup enhanced security systems
+    try {
+        console.log('Cleaning up enhanced security systems...');
+        runtimeProtection.cleanup();
+        memoryProtector.cleanup();
+        networkObfuscator.cleanup();
+        enhancedSecurityManager.cleanup();
+        console.log('Enhanced security systems cleaned up successfully');
+    } catch (error) {
+        console.error('Failed to cleanup enhanced security:', error);
+    }
 });
 
 app.on('activate', () => {
@@ -489,76 +518,8 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // Handle loader events from Gemini
-    ipcMain.on('show-loader', (event, message, subtext) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('show-loader', message, subtext);
-        }
-    });
-
-    ipcMain.on('hide-loader', (event) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('hide-loader');
-        }
-    });
-
-    ipcMain.on('emergency-stop-loader', (event) => {
-        if (mainWindow) {
-            mainWindow.webContents.send('emergency-stop-loader');
-        }
-    });
-
-    ipcMain.handle('get-usage-count', (event) => {
-        return getUsageCount();
-    });
 
     // Handle session timer management
-    ipcMain.handle('start-session-timer', (event) => {
-        const currentUsage = getUsageCount();
-        console.log(`[IPC] start-session-timer called. Current usage: ${currentUsage}/${MAX_USAGE_LIMIT}`);
-        
-        const limitReached = isUsageLimitReached();
-        if (limitReached) {
-            console.log('[IPC] Usage limit reached - cannot start new session');
-            return { success: false, message: 'Usage limit reached' };
-        }
-        
-        console.log('[IPC] Starting session timer...');
-        startSessionTimer();
-        return { success: true, message: 'Session timer started' };
-    });
-
-    // Handle settings management
-    ipcMain.handle('update-usage-settings', (event, newSettings) => {
-        try {
-            if (newSettings.sessionDuration) {
-                SESSION_DURATION_LIMIT = newSettings.sessionDuration;
-            }
-            if (newSettings.maxUsage) {
-                MAX_USAGE_LIMIT = newSettings.maxUsage;
-            }
-            saveUsageSettings();
-            
-            console.log(`[SETTINGS] Updated: ${SESSION_DURATION_LIMIT/1000}s duration, ${MAX_USAGE_LIMIT} max usage`);
-            return { 
-                success: true, 
-                sessionDuration: SESSION_DURATION_LIMIT,
-                maxUsage: MAX_USAGE_LIMIT
-            };
-        } catch (error) {
-            console.error('[SETTINGS] Error updating settings:', error);
-            return { success: false, error: error.message };
-        }
-    });
-
-    ipcMain.handle('get-usage-settings', (event) => {
-        return {
-            sessionDuration: SESSION_DURATION_LIMIT,
-            maxUsage: MAX_USAGE_LIMIT,
-            currentUsage: getUsageCount(),
-            remaining: Math.max(0, MAX_USAGE_LIMIT - getUsageCount())
-        };
-    });
 
     ipcMain.handle('reset-usage-count', () => {
         return resetUsageCount();
