@@ -1,64 +1,72 @@
-<img width="1299" height="424" alt="cd (1)" src="https://github.com/user-attachments/assets/b25fff4d-043d-4f38-9985-f832ae0d0f6e" />
+# Eon AI
 
-## Recall.ai - API for desktop recording
+Eon AI is an Electron desktop assistant for getting contextual AI responses during interviews, meetings, presentations, and other on-screen work. It can use screen and audio input during a session and includes a local inference mode.
 
-If you’re looking for a hosted desktop recording API, consider checking out [Recall.ai](https://www.recall.ai/product/desktop-recording-sdk/?utm_source=github&utm_medium=sponsorship&utm_campaign=sohzm-cheating-daddy), an API that records Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
-
-This project is sponsored by Recall.ai.
-
----
-
-> [!NOTE]  
-> Use latest MacOS and Windows version, older versions have limited support
-
-> [!NOTE]  
-> During testing it wont answer if you ask something, you need to simulate interviewer asking question, which it will answer
-
-A real-time AI assistant that provides contextual help during video calls, interviews, presentations, and meetings using screen capture and audio analysis.
+> **Platform note:** The bundled local inference runtime currently provides binaries for macOS (Apple Silicon and Intel) and Windows (x64). Linux builds may run the Electron app, but local inference is not currently supported there.
 
 ## Features
 
-- **Live AI Assistance**: Real-time help powered by Google Gemini 2.0 Flash Live
-- **Screen & Audio Capture**: Analyzes what you see and hear for contextual responses
-- **Multiple Profiles**: Interview, Sales Call, Business Meeting, Presentation, Negotiation
-- **Notch Interface**: Always-on-top notch panel with in-panel navigation for every screen
-- **Click-through Mode**: Make window transparent to clicks when needed
-- **Cross-platform**: Works on macOS, Windows, and Linux (kinda, dont use, just for testing rn)
-
-## Setup
-
-1. **Get a Gemini API Key**: Visit [Google AI Studio](https://aistudio.google.com/apikey)
-2. **Install Dependencies**: `npm install`
-3. **Run the App**: `npm start`
-
-## Usage
-
-1. Enter your Gemini API key on the Home screen in the notch panel
-2. Choose your profile and language in settings
-3. Click "Start Session" to begin
-4. Use the screen selector in the notch header to open Home, AI Context, History, Settings, Help, or the live assistant
-5. The AI will provide real-time assistance based on your screen and what interview asks
-
-The app opens as a compact, always-on-top notch panel. Longer screens scroll inside the panel, and the header remains available for navigation and window controls while a session is active.
-
-On first launch, you can drag and drop a text-based resume PDF (up to 10 MB) to add it as AI context.
-
-## Keyboard Shortcuts
-
-- **Window Movement**: `Ctrl/Cmd + Arrow Keys` - Move window
-- **Click-through**: `Ctrl/Cmd + M` - Toggle mouse events
-- **Close/Back**: `Ctrl/Cmd + \` - Close window or go back
-- **Send Message**: `Enter` - Send text to AI
-
-## Audio Capture
-
-- **macOS**: [SystemAudioDump](https://github.com/Mohammed-Yasin-Mulla/Sound) for system audio
-- **Windows**: Loopback audio capture
-- **Linux**: Microphone input
+- **Local AI mode** using `llama.cpp` for language models and `whisper.cpp` for speech transcription.
+- **Model selection** for local language models, including Qwen GGUF presets and a custom model option.
+- **Speech recognition choices** for the Tiny, Base, and Small English Whisper models.
+- **Screen and audio capture** for session context, subject to operating-system permissions and the selected AI provider.
+- **Session tools** including configurable assistant context, conversation history, and keyboard shortcuts.
+- **Resume context** by importing a PDF resume (up to 10 MB) during onboarding.
+- **Electron Forge** packaging for supported desktop platforms.
 
 ## Requirements
 
-- Electron-compatible OS (macOS, Windows, Linux)
-- Gemini API key
-- Screen recording permissions
-- Microphone/audio permissions
+- Node.js and npm
+- macOS or Windows x64 for the bundled local AI runtime
+- Internet access for installing npm packages and downloading local AI models/runtime binaries
+- Screen recording and microphone permissions where required by your operating system
+
+The local language model and Whisper model can require significant disk space and memory. Choose a model that your computer can run comfortably.
+
+## Getting started
+
+```bash
+git clone https://github.com/develper21/The_Eon_AI.git
+cd The_Eon_AI
+npm install
+npm start
+```
+
+To run the desktop app from an existing checkout, use `npm start`.
+
+## Using the app
+
+1. Launch the app and complete onboarding.
+2. Add optional context such as your resume, then review the assistant settings.
+3. Choose the local language model and Whisper model that suit your computer.
+4. Grant screen and microphone permissions when prompted.
+5. Start a session and use the navigation controls to open the assistant, context, history, settings, or help.
+
+Some screens and settings may still use the upstream product name while the project branding is being updated.
+
+## Local AI and privacy
+
+In local mode, language-model inference and speech transcription run using the downloaded local runtime and models. The app downloads these components when needed and stores its configuration, models, and session history in the operating system's application data directory.
+
+Screen and audio content is sensitive. The destination of session data depends on the selected provider and features: local mode uses local inference, while any enabled cloud provider can transmit data to that provider. Review provider settings and permissions before starting a session. Delete stored history from the app when it is no longer needed.
+
+## Development and packaging
+
+```bash
+npm start       # Start the app in development
+npm run package # Package the app
+npm run make    # Create platform installers
+```
+
+The application is built with Electron, Electron Forge, and Lit-based UI components. `npm run lint` currently reports that no linter is configured.
+
+## Git remotes
+
+The canonical repository is [develper21/The_Eon_AI](https://github.com/develper21/The_Eon_AI). To correct the origin URL in an existing checkout:
+
+```bash
+git remote set-url origin https://github.com/develper21/The_Eon_AI.git
+git remote -v
+```
+
+An optional `upstream` remote can remain configured for the original source repository; it does not change where `origin` points.
