@@ -60,7 +60,19 @@ typings/
 
 # dotenv environment variables file
 .env
-.env.test
+.env.*
+!.env.example
+.dev.vars
+
+# Secrets and credentials — never commit these
+credentials.json
+*credential*.json
+*secret*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
